@@ -1,5 +1,9 @@
-if game.Players.LocalPlayer.PlayerGui:FindFirstChild("sscriptrOC") then
-    game.Players.LocalPlayer.PlayerGui.sscriptrOC:Destroy()
+local player = game:GetService("Players").LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+if playerGui:FindFirstChild("sscriptrOC") then
+    playerGui.sscriptrOC:Destroy()
+
     for _, obj in ipairs(workspace.Obbies:GetDescendants()) do
         if obj:IsA("BoxHandleAdornment") then
             obj:Destroy()
@@ -13,7 +17,7 @@ print("Thanks Skelly Friend, BLOCKE, gord for inspiring me :> Also thanks sno3ik
 print("Remember to get 100M Cash before Cloning.")
 
 local ui = Instance.new("ScreenGui")
-ui.Parent = game.Players.LocalPlayer.PlayerGui
+ui.Parent = playerGui
 ui.ResetOnSpawn = false
 ui.IgnoreGuiInset = true
 ui.Name = "sscriptrOC"
