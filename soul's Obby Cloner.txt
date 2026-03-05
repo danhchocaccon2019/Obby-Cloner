@@ -480,7 +480,7 @@ submitButton.MouseButton1Click:Connect(function()
                     statusActive = false
                     return
                 end
-                statusBase = "Status: Placing Base Parts"
+                statusBase = "Placing: " .. partName ..
                 statusActive = true
         
                 local spawnX = math.random(myArea.Position.X - (myArea.Size.X / 2 - 10), myArea.Position.X + (myArea.Size.X / 2 - 10))
