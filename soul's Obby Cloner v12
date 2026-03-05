@@ -1,0 +1,1048 @@
+if game.Players.LocalPlayer.PlayerGui:FindFirstChild("sscriptrOC") then
+    game.Players.LocalPlayer.PlayerGui.sscriptrOC:Destroy()
+    for _, obj in ipairs(workspace.Obbies:GetDescendants()) do
+        if obj:IsA("BoxHandleAdornment") then
+            obj:Destroy()
+        end
+    end
+    return
+end
+
+warn("-+-------=-s͘c͘r͘i͘p͘t͘-b͘e͘g͘i͘n͘-=-------+-")
+print("Thanks Skelly Friend, BLOCKE, gord for inspiring me :> Also thanks sno3iku for supporting me through out the journey :3")
+print("Remember to get 100M Cash before Cloning.")
+
+local ui = Instance.new("ScreenGui")
+ui.Parent = game.Players.LocalPlayer.PlayerGui
+ui.ResetOnSpawn = false
+ui.IgnoreGuiInset = true
+ui.Name = "sscriptrOC"
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Parent = ui
+mainFrame.Size = UDim2.new(0.3, 0, 0.2, 0)
+mainFrame.Position = UDim2.new(0.35, 0, 0.4, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+mainFrame.BorderSizePixel = 1
+mainFrame.Name = "MainFrame"
+
+local infoBar = Instance.new("Frame")
+infoBar.Parent = mainFrame
+infoBar.Size = UDim2.new(1, 0, 0, 40)
+infoBar.Position = UDim2.new(0, 0, 1, 0)
+infoBar.BackgroundColor3 = Color3.fromRGB(235, 235, 235)
+infoBar.BorderSizePixel = 1
+
+local header = Instance.new("Frame")
+header.Parent = mainFrame
+header.Size = UDim2.new(1, 0, 0.2, 0)
+header.Position = UDim2.new(0, 0, 0, 0)
+header.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+header.BorderSizePixel = 1
+
+local headerText = Instance.new("TextLabel")
+headerText.Parent = header
+headerText.Size = UDim2.new(1, 0, 1, 0)
+headerText.Text = "Obby Stealer Script"
+headerText.Font = Enum.Font.SourceSans
+headerText.TextScaled = true
+headerText.TextColor3 = Color3.fromRGB(0, 0, 0)
+headerText.BackgroundTransparency = 1
+
+local exitButton = Instance.new("TextButton")
+exitButton.Parent = header
+exitButton.Size = UDim2.new(0, 20, 0, 20)
+exitButton.Position = UDim2.new(1, -25, 0, 5)
+exitButton.Text = "X"
+exitButton.Font = Enum.Font.SourceSansBold
+exitButton.TextScaled = true
+exitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+exitButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+exitButton.BorderSizePixel = 1
+
+exitButton.MouseButton1Click:Connect(function()
+    ui:Destroy()
+end)
+
+local textBox = Instance.new("TextBox")
+textBox.Parent = mainFrame
+textBox.Size = UDim2.new(0.8, 0, 0.4, 0)
+textBox.Position = UDim2.new(0.1, 0, 0.3, 0)
+textBox.PlaceholderText = "Enter Player Name or Display Name"
+textBox.Font = Enum.Font.SourceSans
+textBox.Text = ""
+textBox.TextScaled = true
+textBox.TextColor3 = Color3.fromRGB(0, 0, 0)
+textBox.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+textBox.BorderSizePixel = 1
+
+local submitButton = Instance.new("TextButton")
+submitButton.Parent = mainFrame
+submitButton.Size = UDim2.new(0.5, 0, 0.2, 0)
+submitButton.Position = UDim2.new(0.25, 0, 0.75, 0)
+submitButton.Text = "Copy"
+submitButton.Font = Enum.Font.SourceSansBold
+submitButton.TextScaled = true
+submitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+submitButton.BackgroundColor3 = Color3.fromRGB(0, 128, 255)
+submitButton.BorderSizePixel = 1
+
+local dragging = false
+local dragStart, startPos
+
+header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+header.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+    if dragging and input == dragInput then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+local resizeHandle = Instance.new("Frame")
+resizeHandle.Parent = mainFrame
+resizeHandle.Size = UDim2.new(0, 10, 0, 10)
+resizeHandle.Position = UDim2.new(1, -10, 1, -10)
+resizeHandle.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
+resizeHandle.BorderSizePixel = 0
+resizeHandle.Name = "ResizeHandle"
+
+local resizing = false
+local resizeStart, startSize
+
+resizeHandle.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        resizing = true
+        resizeStart = input.Position
+        startSize = mainFrame.Size
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                resizing = false
+            end
+        end)
+    end
+end)
+
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+    if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - resizeStart
+        local newWidth = math.max(startSize.X.Offset + delta.X, -200)
+        local newHeight = math.max(startSize.Y.Offset + delta.Y, -100)
+        mainFrame.Size = UDim2.new(startSize.X.Scale, newWidth, startSize.Y.Scale, newHeight)
+    end
+end)
+
+local Input = textBox
+local SelectText = Instance.new("TextLabel")
+SelectText.Parent = infoBar
+SelectText.Size = UDim2.new(1, -20, 0.5, 0)
+SelectText.Position = UDim2.new(0, 10, 0, 0)
+SelectText.Font = Enum.Font.SourceSansSemibold
+SelectText.TextScaled = false
+SelectText.TextSize = 16
+SelectText.TextXAlignment = Enum.TextXAlignment.Left
+SelectText.TextYAlignment = Enum.TextYAlignment.Center
+SelectText.TextColor3 = Color3.fromRGB(20, 20, 20)
+SelectText.BackgroundTransparency = 1
+SelectText.Text = "Selecting:"
+
+local StatusText = Instance.new("TextLabel")
+StatusText.Parent = infoBar
+StatusText.Size = UDim2.new(1, -20, 0.5, 0)
+StatusText.Position = UDim2.new(0, 10, 0.5, 0)
+StatusText.AnchorPoint = Vector2.new(0, 0)
+StatusText.Font = Enum.Font.SourceSans
+StatusText.TextScaled = false
+StatusText.TextWrapped = false
+StatusText.TextSize = 15
+StatusText.TextXAlignment = Enum.TextXAlignment.Left
+StatusText.TextYAlignment = Enum.TextYAlignment.Center
+StatusText.TextColor3 = Color3.fromRGB(40, 40, 40)
+StatusText.BackgroundTransparency = 1
+StatusText.Text = "Status: Idle   "
+
+local statusBase = ""
+local statusActive = false
+
+task.spawn(function()
+    local dotStates = {".  ", ".. ", "..."}
+    local index = 1
+
+    while StatusText and StatusText.Parent do
+        if statusActive then
+            index = index % 3 + 1
+            StatusText.Text = statusBase .. dotStates[index]
+        end
+        task.wait(0.5)
+    end
+end)
+
+local selectionBox
+
+local function clearHighlight()
+    if selectionBox then
+        selectionBox:Destroy()
+        selectionBox = nil
+    end
+end
+
+local function highlightArea(areaPart)
+    clearHighlight()
+
+    if not areaPart or not areaPart:IsA("BasePart") then
+        return
+    end
+
+    selectionBox = Instance.new("BoxHandleAdornment")
+    selectionBox.Adornee = areaPart
+    selectionBox.AlwaysOnTop = false
+    selectionBox.ZIndex = 10
+    selectionBox.Size = areaPart.Size
+    selectionBox.Color3 = Color3.fromRGB(0, 170, 255)
+    selectionBox.Transparency = 0.6
+    selectionBox.Parent = areaPart
+end
+
+Input:GetPropertyChangedSignal("Text"):Connect(function()
+    local Text = Input.Text
+    T = nil
+    sourceFolder = nil
+
+    if Text ~= "" then
+        local lower = string.lower(Text)
+
+        for _, p in ipairs(game.Players:GetChildren()) do
+            if string.lower(p.Name):sub(1,#Text) == lower
+            or string.lower(p.DisplayName):sub(1,#Text) == lower then
+                T = p
+                sourceFolder = workspace.Obbies:FindFirstChild(p.Name)
+                break
+            end
+        end
+
+        if not T then
+            for _, f in ipairs(workspace:WaitForChild("Featured"):GetChildren()) do
+                if string.lower(f.Name):sub(1,#Text) == lower then
+                    T = f
+                    sourceFolder = f
+                    break
+                end
+            end
+        end
+    end
+
+    if T then
+        SelectText.Text = "Selecting: " .. T.Name
+        if sourceFolder and sourceFolder:FindFirstChild("Area") then
+            local areaPart = sourceFolder.Area:FindFirstChild("Area")
+            highlightArea(areaPart)
+        end
+    else
+        SelectText.Text = "Selecting:"
+        clearHighlight()
+    end
+end)
+
+local cancelCopying = false
+
+local cancelButton = Instance.new("TextButton")
+cancelButton.Parent = mainFrame
+cancelButton.Size = submitButton.Size
+cancelButton.Position = submitButton.Position
+cancelButton.Text = "Cancel"
+cancelButton.Font = Enum.Font.SourceSansBold
+cancelButton.TextScaled = true
+cancelButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+cancelButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+cancelButton.BorderSizePixel = 1
+cancelButton.Visible = false
+
+cancelButton.MouseButton1Click:Connect(function()
+    cancelCopying = true
+    cancelButton.Visible = false
+    submitButton.Visible = true
+end)
+
+submitButton.MouseButton1Click:Connect(function()
+    cancelCopying = false
+    submitButton.Visible = false
+    cancelButton.Visible = true
+    statusBase = "Status: Starting"
+    statusActive = true
+
+    if T then
+        repeat
+            if cancelCopying then
+                StatusText.Text = "Status: Idle   "
+                statusActive = false
+                return
+            end
+            statusBase = "Status: Clearing Obby"
+            statusActive = true
+            stop = game:GetService("ReplicatedStorage").Events.ClearObby:InvokeServer()
+        until stop == true
+
+        local myArea = workspace.Obbies[game.Players.LocalPlayer.Name].Area.Area
+        local playerObby = sourceFolder
+        local localPlayerObby = workspace:WaitForChild("Obbies"):WaitForChild(game.Players.LocalPlayer.Name)
+        local tGateCF = playerObby.GetObby.Gate.CFrame
+        local myGateCF = localPlayerObby.GetObby.Gate.CFrame
+
+        local savedTransforms = {}
+        local savedProperties = {}
+        local savedBehaviours = {}
+
+        if playerObby and playerObby.Items and playerObby.Items.Parts and localPlayerObby then
+            local gatePosition = localPlayerObby.GetObby.Gate.Position
+            local obbyParts = {}
+            for _, folder in ipairs(playerObby.Items:GetChildren()) do
+                if folder:IsA("Folder") then
+                    for _, obj in ipairs(folder:GetChildren()) do
+                        if obj:IsA("BasePart") then
+                            table.insert(obbyParts, obj)
+                        elseif obj:IsA("Model") then
+                            local part = obj:FindFirstChild(obj.Name)
+                            if part and part:IsA("BasePart") then
+                                table.insert(obbyParts, part)
+                            end
+                        end
+                    end
+                end
+            end
+            local addedParts = {}
+            local uniqueParts = {}
+            local partCounts = {}
+        
+            for _, part in ipairs(obbyParts) do
+                savedTransforms[part.Name] = savedTransforms[part.Name] or {}
+                savedProperties[part.Name] = savedProperties[part.Name] or {}
+                savedBehaviours[part.Name] = savedBehaviours[part.Name] or {}
+
+                local movementData = nil
+
+                if part.Name:lower():find("moving") then
+                    movementData = {
+                        part.m1.Value,
+                        part.m2.Value
+                    }
+                end
+
+                local partCFrame = part.CFrame
+                if part.Name:lower():find("push") then
+                    partCFrame = part.OrigCFrame.Value
+                end
+
+                table.insert(savedTransforms[part.Name], {
+                    relative = tGateCF:Inverse() * partCFrame,
+                    size = part.Size,
+                    movement = movementData
+                })
+
+                table.insert(savedProperties[part.Name], {
+                    Color = part.Color,
+                    Material = part.Material,
+                    CanCollide = part.CanCollide,
+                    CastShadow = part.CastShadow,
+                    Reflectance = part.Reflectance,
+                    Transparency = part.Transparency,
+                    Surface = part.TopSurface,
+                    Shape = part:IsA("Part") and part.Shape or nil,
+                    Slipperiness = part.CustomPhysicalProperties and part.CustomPhysicalProperties.FrictionWeight or 0,
+                    Water = part:FindFirstChild("AttributeLinks") and part.AttributeLinks:FindFirstChild("Water") ~= nil
+                })
+
+                for _, child in ipairs(part:GetChildren()) do
+                    if child:IsA("NumberValue") or child:IsA("StringValue") or child:IsA("BoolValue") then
+                        if child.Name:lower() ~= "active" then
+                            table.insert(savedBehaviours[part.Name], {
+                                valueName = child.Name,
+                                value = child.Value
+                            })
+                        end
+                    end
+                end
+
+                if part:IsA("BasePart") then
+                    partCounts[part.Name] = (partCounts[part.Name] or 0) + 1
+                    if not addedParts[part.Name] then
+                        addedParts[part.Name] = true
+                        table.insert(uniqueParts, part.Name)
+                    end
+                end
+            end
+
+            local sortedParts = {}
+            for name, count in pairs(partCounts) do
+                table.insert(sortedParts, {
+                    name = name,
+                    count = count
+                })
+            end
+
+            table.sort(sortedParts, function(a, b)
+                if a.count ~= b.count then
+                    return a.count > b.count
+                end
+                return a.name < b.name
+            end)
+        
+            for _, entry in ipairs(sortedParts) do
+                print(entry.name .. ": " .. entry.count)
+            end
+
+            statusBase = "Status: Placing Base Parts"
+            statusActive = true
+            for _, entry in ipairs(sortedParts) do
+                local partName = entry.name
+                if cancelCopying then
+                    StatusText.Text = "Status: Idle   "
+                    statusActive = false
+                    return
+                end
+                statusBase = "Status: Placing Base Parts"
+                statusActive = true
+        
+                local spawnX = math.random(myArea.Position.X - (myArea.Size.X / 2 - 10), myArea.Position.X + (myArea.Size.X / 2 - 10))
+                local spawnY = math.random(myArea.Position.Y - (myArea.Size.Y / 2 - 10), myArea.Position.Y + (myArea.Size.Y / 2 - 10))
+                local spawnZ = math.random(myArea.Position.Z - (myArea.Size.Z / 2 - 10), myArea.Position.Z + (myArea.Size.Z / 2 - 10))
+        
+                local args = {
+                    [1] = partName,
+                    [2] = CFrame.new(spawnX, spawnY, spawnZ)
+                }
+        
+                local partMade = game:GetService("ReplicatedStorage").Events.AddObject:InvokeServer(unpack(args))
+                while partMade ~= true do
+                    if cancelCopying then
+                        StatusText.Text = "Status: Idle   "
+                        statusActive = false
+                        return
+                    end
+                    task.wait(1)
+                    partMade = game:GetService("ReplicatedStorage").Events.AddObject:InvokeServer(unpack(args))
+                end
+            end
+
+            local originalParts = {}
+            for name, _ in pairs(partCounts) do
+                local inst = nil
+                for _, folder in ipairs(localPlayerObby.Items:GetChildren()) do
+                    if folder:IsA("Folder") then
+                        local found = folder:FindFirstChild(name)
+                        if found then
+                            if found:IsA("Model") then
+                                inst = found:FindFirstChild(name)
+                            else
+                                inst = found
+                            end
+                            break
+                        end
+                    end
+                end
+
+                if inst then
+                    table.insert(originalParts, inst)
+                end
+            end
+
+            statusBase = "Status: Cloning Parts"
+            statusActive = true
+            local MAX_BATCH = 1000
+            for _, entry in ipairs(sortedParts) do
+                local name = entry.name
+                local count = entry.count
+                if cancelCopying then
+                    StatusText.Text = "Status: Idle   "
+                    statusActive = false
+                    return
+                end
+
+                local partInst = nil
+
+                for _, folder in ipairs(localPlayerObby.Items:GetChildren()) do
+                    if folder:IsA("Folder") then
+                        local found = folder:FindFirstChild(name)
+                        if found then
+                            if found:IsA("Model") then
+                                partInst = found:FindFirstChild(name)
+                            else
+                                partInst = found
+                            end
+                            break
+                        end
+                    end
+                end
+
+                if not partInst then continue end
+
+                local left = count
+
+                statusBase = "Cloning: " .. name .. " x" .. count
+                statusActive = true
+                while left > 0 do
+                    if cancelCopying then
+                        StatusText.Text = "Status: Idle   "
+                        statusActive = false
+                        return
+                    end
+                    statusBase = "Cloning: " .. name .. " | Remaining: " .. left
+                    statusActive = true
+
+                    local batch = math.min(left, MAX_BATCH)
+                    local args = {
+                        {}
+                    }
+
+                    for i = 1, batch do
+                        local spawnX = math.random(myArea.Position.X - (myArea.Size.X / 2 - 10), myArea.Position.X + (myArea.Size.X / 2 - 10))
+                        local spawnY = math.random(myArea.Position.Y - (myArea.Size.Y / 2 - 10), myArea.Position.Y + (myArea.Size.Y / 2 - 10))
+                        local spawnZ = math.random(myArea.Position.Z - (myArea.Size.Z / 2 - 10), myArea.Position.Z + (myArea.Size.Z / 2 - 10))
+
+                        local movementData = nil
+
+                        -- detect moving parts
+                        if partInst:FindFirstChild("m1") and partInst:FindFirstChild("m2") then
+                            movementData = {
+                                partInst.m1.Value,
+                                partInst.m2.Value
+                            }
+                        end
+
+                        if movementData then
+                            table.insert(args[1], {
+                                partInst,
+                                CFrame.new(spawnX, spawnY, spawnZ),
+                                Vector3.new(1,1,1),
+                                movementData
+                            })
+                        else
+                            table.insert(args[1], {
+                                partInst,
+                                CFrame.new(spawnX, spawnY, spawnZ),
+                                Vector3.new(1,1,1)
+                            })
+                        end
+                    end
+
+                    local cloneMade = game:GetService("ReplicatedStorage").Events.CloneObject:InvokeServer(unpack(args))
+                    while cloneMade ~= true do
+                        if cancelCopying then
+                            StatusText.Text = "Status: Idle   "
+                            statusActive = false
+                            return
+                        end
+                        task.wait(1)
+                        cloneMade = game:GetService("ReplicatedStorage").Events.CloneObject:InvokeServer(unpack(args))
+                    end
+
+                    left -= batch
+                end
+            end
+
+            statusBase = "Status: Deleting Originals"
+            statusActive = true
+            if #originalParts > 0 then
+                while true do
+                    if cancelCopying then
+                        StatusText.Text = "Status: Idle   "
+                        statusActive = false
+                        return
+                    end
+                    local stillThere = {}
+                    statusBase = "Deleting: " .. #stillThere .. " remaining"
+                    statusActive = true
+
+                    for _, inst in ipairs(originalParts) do
+                        if inst and inst.Parent then
+                            table.insert(stillThere, inst)
+                        end
+                    end
+
+                    if #stillThere == 0 then
+                        break
+                    end
+
+                    local args = {stillThere}
+                    game:GetService("ReplicatedStorage").Events.DeleteObject:InvokeServer(unpack(args))
+
+                    task.wait(1)
+                end
+            end
+
+            local function isInsideArea(cf, size, area)
+                local half = size / 2
+
+                local corners = {
+                    Vector3.new(-half.X, -half.Y, -half.Z),
+                    Vector3.new(-half.X, -half.Y,  half.Z),
+                    Vector3.new(-half.X,  half.Y, -half.Z),
+                    Vector3.new(-half.X,  half.Y,  half.Z),
+                    Vector3.new( half.X, -half.Y, -half.Z),
+                    Vector3.new( half.X, -half.Y,  half.Z),
+                    Vector3.new( half.X,  half.Y, -half.Z),
+                    Vector3.new( half.X,  half.Y,  half.Z)
+                }
+
+                local halfArea = area.Size / 2
+                local areaMin = area.Position - halfArea
+                local areaMax = area.Position + halfArea
+
+                for _, offset in ipairs(corners) do
+                    local worldPoint = (cf * CFrame.new(offset)).Position
+
+                    if worldPoint.X < areaMin.X or worldPoint.X > areaMax.X
+                    or worldPoint.Y < areaMin.Y or worldPoint.Y > areaMax.Y
+                    or worldPoint.Z < areaMin.Z or worldPoint.Z > areaMax.Z then
+                        return false
+                    end
+                end
+
+                return true
+            end
+
+            statusBase = "Status: Preparing Move"
+            statusActive = true
+            local allMoves = {}
+            for partName, list in pairs(savedTransforms) do
+                local index = 1
+
+                allMoves[partName] = allMoves[partName] or {}
+
+                for _, folder in ipairs(localPlayerObby.Items:GetChildren()) do
+                    if folder:IsA("Folder") then
+                        for _, inst in ipairs(folder:GetChildren()) do
+                            local resolvedInst = inst
+                            if inst:IsA("Model") then
+                                resolvedInst = inst:FindFirstChild(inst.Name)
+                            end
+                            if resolvedInst and resolvedInst.Name == partName and list[index] then
+                                local transformData = savedTransforms[partName][index]
+                                local propertyData = savedProperties[partName][index]
+
+                                table.insert(allMoves[partName], {
+                                    clone = resolvedInst,
+                                    targetCF = myGateCF * transformData.relative,
+                                    size = transformData.size,
+                                    movement = transformData.movement,
+                                    properties = propertyData
+                                })
+
+                                index += 1
+                            end
+                        end
+                    end
+                end
+            end
+
+            local sortedMoveGroups = {}
+
+            for partName, group in pairs(allMoves) do
+                if group and #group > 0 then
+                    table.insert(sortedMoveGroups, {
+                        name = partName,
+                        group = group,
+                        count = #group
+                    })
+                end
+            end
+
+            table.sort(sortedMoveGroups, function(a, b)
+                if a.count ~= b.count then
+                    return a.count > b.count
+                end
+                return a.name < b.name
+            end)
+
+            statusBase = "Status: Moving Parts"
+            statusActive = true
+            local MAX_BATCH = 1000
+            local DeleteRemote = game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("DeleteObject")
+
+            for _, entry in ipairs(sortedMoveGroups) do
+                local partName = entry.name
+                local group = entry.group
+                local i = 1
+
+                while i <= #group do
+                    if cancelCopying then
+                        StatusText.Text = "Status: Idle   "
+                        statusActive = false
+                        return
+                    end
+
+                    local batch = {}
+                    local deleteBatch = {}
+                    for j = i, math.min(i + MAX_BATCH - 1, #group) do
+                        local data = group[j]
+                        local targetCF = data.targetCF
+                        local size = data.size
+
+                        local inside = true
+
+                        -- Check main position
+                        if not isInsideArea(targetCF, size, myArea) then
+                            inside = false
+                        end
+
+                        -- If moving part, check both movement CFrames
+                        if inside and data.movement then
+                            for _, movePos in ipairs(data.movement) do
+                                local moveCF
+
+                                if typeof(movePos) == "Vector3" then
+                                    moveCF = CFrame.new(movePos)
+                                else
+                                    moveCF = movePos
+                                end
+
+                                if not isInsideArea(moveCF, size, myArea) then
+                                    inside = false
+                                    break
+                                end
+                            end
+                        end
+
+                        if inside then
+                            if data.movement then
+                                table.insert(batch, {
+                                    data.clone,
+                                    data.targetCF,
+                                    data.size,
+                                    data.movement
+                                })
+                            else
+                                table.insert(batch, {
+                                    data.clone,
+                                    data.targetCF,
+                                    data.size
+                                })
+                            end
+                        else
+                            table.insert(deleteBatch, data.clone)
+                            print("Skipped (outside area):", partName)
+                        end
+
+                        statusBase = "Moving: " .. partName .. " | " .. j .. "/" .. #group
+                        statusActive = true
+                    end
+
+                    if #batch == 0 then
+                        i += MAX_BATCH
+                        continue
+                    end
+
+                    local MoveObject = game:GetService("ReplicatedStorage").Events.MoveObject:InvokeServer(batch)
+                    while MoveObject ~= true do
+                        if cancelCopying then
+                            StatusText.Text = "Status: Idle   "
+                            statusActive = false
+                            return
+                        end
+                        task.wait(1)
+                        MoveObject = game:GetService("ReplicatedStorage").Events.MoveObject:InvokeServer(batch)
+                        print(partName)
+                        print(MoveObject)
+                    end
+
+                    i += MAX_BATCH
+
+                    -- Batch delete OOB parts safely
+                    if #deleteBatch > 0 then
+                        local dIndex = 1
+
+                        while dIndex <= #deleteBatch do
+                            local dBatch = {}
+
+                            for j = dIndex, math.min(dIndex + MAX_BATCH - 1, #deleteBatch) do
+                                table.insert(dBatch, deleteBatch[j])
+                            end
+
+                            local result = DeleteRemote:InvokeServer(dBatch)
+
+                            while result ~= true do
+                                task.wait(1)
+                                result = DeleteRemote:InvokeServer(dBatch)
+                            end
+
+                            dIndex += MAX_BATCH
+                        end
+                    end
+                end
+            end
+
+            statusBase = "Status: Syncing Properties"
+            statusActive = true
+
+            local PaintRemote = game:GetService("ReplicatedStorage")
+                :WaitForChild("Events")
+                :WaitForChild("PaintObject")
+
+            local MAX_BATCH = 1000
+
+            local propertyBatches = {
+                Color = {},
+                Material = {},
+                CanCollide = {},
+                CastShadow = {},
+                Reflectance = {},
+                Transparency = {},
+                Surface = {},
+                Shape = {},
+                Slipperiness = {},
+                Water = {}
+            }
+
+            local propertyOrder = {
+                "Color",
+                "Material",
+                "CanCollide",
+                "CastShadow",
+                "Reflectance",
+                "Transparency",
+                "Surface",
+                "Shape",
+                "Slipperiness",
+                "Water"
+            }
+
+            -- Build per-property batches with exact mapping
+            for _, group in pairs(allMoves) do
+                for _, data in ipairs(group) do
+                    local clone = data.clone
+                    local props = data.properties
+
+                    for property, value in pairs(props) do
+
+                        local key = value
+
+                        if property == "Color" then
+                            key = string.format("%d_%d_%d",
+                                math.floor(value.R*255),
+                                math.floor(value.G*255),
+                                math.floor(value.B*255)
+                            )
+                        elseif property == "Material" or property == "Surface" or property == "Shape" then
+                            key = value.Name
+                        end
+
+                        propertyBatches[property][key] =
+                            propertyBatches[property][key] or {
+                                value = value,
+                                parts = {}
+                            }
+
+                        table.insert(propertyBatches[property][key].parts, clone)
+                    end
+                end
+            end
+
+            for _, property in ipairs(propertyOrder) do
+
+            local groups = propertyBatches[property]
+            local entries = {}
+
+            for key, data in pairs(groups) do
+                table.insert(entries, {
+                    key = key,
+                    data = data,
+                    count = #data.parts
+                })
+            end
+
+            table.sort(entries, function(a, b)
+                if a.count ~= b.count then
+                    return a.count > b.count
+                end
+                return tostring(a.key) < tostring(b.key)
+            end)
+
+            for _, entry in ipairs(entries) do
+                local data = entry.data
+                local value = data.value
+                local parts = data.parts
+                local total = #parts
+                local processed = 0
+
+                local i = 1
+                while i <= total do
+                    if cancelCopying then
+                        StatusText.Text = "Status: Idle   "
+                        statusActive = false
+                        return
+                    end
+
+                    local batch = {}
+                    for j = i, math.min(i + MAX_BATCH - 1, total) do
+                        table.insert(batch, parts[j])
+                    end
+
+                    local sendValue = value
+                    if property == "Material"
+                        or property == "Surface"
+                        or property == "Shape" then
+                        sendValue = value.Name
+                    end
+
+                    local displayValue = sendValue
+                    if property == "Color" then
+                        displayValue = string.format(
+                            "RGB(%d,%d,%d)",
+                            math.floor(value.R * 255),
+                            math.floor(value.G * 255),
+                            math.floor(value.B * 255)
+                        )
+                    end
+
+                    statusBase =
+                        "Syncing: " ..
+                        property ..
+                        " = " ..
+                        tostring(displayValue) ..
+                        " | " ..
+                        processed ..
+                        "/" ..
+                        total
+
+                    statusActive = true
+
+                    local result = PaintRemote:InvokeServer(batch, property, sendValue)
+
+                    while result ~= true do
+                        task.wait(1)
+                        result = PaintRemote:InvokeServer(batch, property, sendValue)
+                    end
+
+                    processed += #batch
+                    i += MAX_BATCH
+                end
+            end
+
+            local behaviourBatches = {}
+
+            for partName, list in pairs(savedBehaviours) do
+                for _, entry in ipairs(list) do
+                    local key = tostring(entry.valueName) .. "|" .. tostring(entry.value)
+                    behaviourBatches[key] = behaviourBatches[key] or {
+                        valueName = entry.valueName,
+                        value = entry.value,
+                        parts = {}
+                    }
+                end
+            end
+
+            for _, group in pairs(allMoves) do
+                for _, data in ipairs(group) do
+                    local clone = data.clone
+                    local partBehaviours = savedBehaviours[clone.Name]
+                    if partBehaviours then
+                        for _, entry in ipairs(partBehaviours) do
+                            local key = tostring(entry.valueName) .. "|" .. tostring(entry.value)
+                            if behaviourBatches[key] then
+                                table.insert(behaviourBatches[key].parts, clone)
+                            end
+                        end
+                    end
+                end
+            end
+
+            local sortedBehaviours = {}
+            for key, data in pairs(behaviourBatches) do
+                table.insert(sortedBehaviours, {
+                    key = key,
+                    data = data,
+                    count = #data.parts
+                })
+            end
+
+            local valueNameTotals = {}
+            for _, entry in ipairs(sortedBehaviours) do
+                local vName = entry.data.valueName
+                valueNameTotals[vName] = (valueNameTotals[vName] or 0) + entry.count
+            end
+
+            table.sort(sortedBehaviours, function(a, b)
+                local totalA = valueNameTotals[a.data.valueName]
+                local totalB = valueNameTotals[b.data.valueName]
+                if totalA ~= totalB then
+                    return totalA > totalB
+                end
+                if a.data.valueName ~= b.data.valueName then
+                    return a.data.valueName < b.data.valueName
+                end
+                return tostring(a.data.value) < tostring(b.data.value)
+            end)
+
+            statusBase = "Status: Syncing Behaviours"
+            statusActive = true
+
+            local BehaviourRemote = game:GetService("ReplicatedStorage")
+                :WaitForChild("Events")
+                :WaitForChild("BehaviourObject")
+
+            for _, entry in ipairs(sortedBehaviours) do
+                local valueName = entry.data.valueName
+                local value = entry.data.value
+                local parts = entry.data.parts
+                local total = #parts
+                local i = 1
+
+                while i <= total do
+                    if cancelCopying then
+                        StatusText.Text = "Status: Idle   "
+                        statusActive = false
+                        return
+                    end
+
+                    local batch = {}
+                    for j = i, math.min(i + MAX_BATCH - 1, total) do
+                        table.insert(batch, parts[j])
+                    end
+
+                    statusBase = "Behaviour: " .. valueName .. " = " .. tostring(value) .. " | " .. i .. "/" .. total
+                    statusActive = true
+
+                    local result = BehaviourRemote:InvokeServer(batch, valueName, value)
+
+                    while result ~= true do
+                        if cancelCopying then
+                            StatusText.Text = "Status: Idle   "
+                            statusActive = false
+                            return
+                        end
+                        task.wait(1)
+                        result = BehaviourRemote:InvokeServer(batch, valueName, value)
+                    end
+
+                    i += MAX_BATCH
+                end
+            end
+        end
+        end
+    end
+    cancelButton.Visible = false
+    submitButton.Visible = true
+    StatusText.Text = "Status: Idle   "
+    statusActive = false
+end)
