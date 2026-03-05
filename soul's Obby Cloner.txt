@@ -420,9 +420,55 @@ submitButton.MouseButton1Click:Connect(function()
                 return a.name < b.name
             end)
         
-            for _, entry in ipairs(sortedParts) do
-                print(entry.name .. ": " .. entry.count)
+            -- Debug: print all unique properties and behaviours
+            print("=== Unique Properties ===")
+            local propCounts = {}
+            for _, part in ipairs(obbyParts) do
+                local props = {
+                    Color = tostring(part.Color),
+                    Material = part.Material.Name,
+                    CanCollide = tostring(part.CanCollide),
+                    CastShadow = tostring(part.CastShadow),
+                    Reflectance = tostring(part.Reflectance),
+                    Transparency = tostring(part.Transparency),
+                    Surface = part.TopSurface.Name,
+                    Shape = part:IsA("Part") and part.Shape.Name or "N/A",
+                    Slipperiness = tostring(part.CustomPhysicalProperties and part.CustomPhysicalProperties.FrictionWeight or 0),
+                }
+                for propName, propVal in pairs(props) do
+                    local key = propName .. " = " .. propVal
+                    propCounts[key] = (propCounts[key] or 0) + 1
+                end
             end
+            for key, count in pairs(propCounts) do
+                print(key .. " | x" .. count)
+            end
+
+            print("=== Unique Behaviours ===")
+            local behavCounts = {}
+            for partName, list in pairs(savedBehaviours) do
+                for _, entry in ipairs(list) do
+                    local key = entry.valueName .. " = " .. tostring(entry.value)
+                    behavCounts[key] = (behavCounts[key] or 0) + 1
+                end
+            end
+            for key, count in pairs(behavCounts) do
+                print(key .. " | x" .. count)
+            end
+            local totalPropBatches = 0
+            for _ in pairs(propCounts) do
+                totalPropBatches += 1
+            end
+
+            local totalBehavBatches = 0
+            for _ in pairs(behavCounts) do
+                totalBehavBatches += 1
+            end
+
+            print("=== Total Property Batches: " .. totalPropBatches .. " ===")
+            print("=== Total Behaviour Batches: " .. totalBehavBatches .. " ===")
+            print("=== End Debug ===")
+            -- Debug: print all unique properties and behaviours
 
             statusBase = "Status: Placing Base Parts"
             statusActive = true
@@ -644,7 +690,7 @@ submitButton.MouseButton1Click:Connect(function()
                 local index = 1
 
                 allMoves[partName] = allMoves[partName] or {}
-                
+
                 for _, folder in ipairs(localPlayerObby.Items:GetChildren()) do
                     if folder:IsA("Folder") then
                         for _, inst in ipairs(folder:GetChildren()) do
