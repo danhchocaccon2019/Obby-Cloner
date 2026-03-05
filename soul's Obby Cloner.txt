@@ -314,6 +314,18 @@ submitButton.MouseButton1Click:Connect(function()
         local savedProperties = {}
         local savedBehaviours = {}
 
+        local hasAdvancedTools = workspace.Gamepasses.AdvancedTools:FindFirstChild(game.Players.LocalPlayer.Name) ~= nil
+
+        local advancedToolsParts = {
+            ["Advanced Tools Part"] = true,
+            ["Music Part"] = true,
+            ["Music Zone"] = true
+        }
+
+        local function isAdvancedPart(name)
+            return advancedToolsParts[name] and not hasAdvancedTools
+        end
+
         if playerObby and playerObby.Items and playerObby.Items.Parts and localPlayerObby then
             local gatePosition = localPlayerObby.GetObby.Gate.Position
             local obbyParts = {}
@@ -416,6 +428,7 @@ submitButton.MouseButton1Click:Connect(function()
             statusActive = true
             for _, entry in ipairs(sortedParts) do
                 local partName = entry.name
+                if isAdvancedPart(partName) then continue end
                 if cancelCopying then
                     StatusText.Text = "Status: Idle   "
                     statusActive = false
@@ -473,6 +486,7 @@ submitButton.MouseButton1Click:Connect(function()
             for _, entry in ipairs(sortedParts) do
                 local name = entry.name
                 local count = entry.count
+                if isAdvancedPart(name) then continue end
                 if cancelCopying then
                     StatusText.Text = "Status: Idle   "
                     statusActive = false
@@ -626,10 +640,11 @@ submitButton.MouseButton1Click:Connect(function()
             statusActive = true
             local allMoves = {}
             for partName, list in pairs(savedTransforms) do
+                if isAdvancedPart(partName) then continue end
                 local index = 1
 
                 allMoves[partName] = allMoves[partName] or {}
-
+                
                 for _, folder in ipairs(localPlayerObby.Items:GetChildren()) do
                     if folder:IsA("Folder") then
                         for _, inst in ipairs(folder:GetChildren()) do
