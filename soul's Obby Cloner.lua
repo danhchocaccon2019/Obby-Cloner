@@ -170,7 +170,7 @@ SelectText.Text = "Selecting:"
 
 local StatusText = Instance.new("TextLabel")
 StatusText.Parent = infoBar
-StatusText.Size = UDim2.new(1, -20, 0.5, 0)
+StatusText.Size = UDim2.new(0.7, -10, 0.5, 0)
 StatusText.Position = UDim2.new(0, 10, 0.5, 0)
 StatusText.AnchorPoint = Vector2.new(0, 0)
 StatusText.Font = Enum.Font.SourceSans
@@ -183,8 +183,25 @@ StatusText.TextColor3 = Color3.fromRGB(40, 40, 40)
 StatusText.BackgroundTransparency = 1
 StatusText.Text = "Status: Idle   "
 
+local ETAText = Instance.new("TextLabel")
+ETAText.Parent = infoBar
+ETAText.Size = UDim2.new(0.3, -10, 0.5, 0)
+ETAText.Position = UDim2.new(0.7, 0, 0.5, 0)
+ETAText.AnchorPoint = Vector2.new(0, 0)
+ETAText.Font = Enum.Font.SourceSans
+ETAText.TextScaled = false
+ETAText.TextWrapped = false
+ETAText.TextSize = 15
+ETAText.TextXAlignment = Enum.TextXAlignment.Right
+ETAText.TextYAlignment = Enum.TextYAlignment.Center
+ETAText.TextColor3 = Color3.fromRGB(40, 40, 40)
+ETAText.BackgroundTransparency = 1
+ETAText.Text = ""
+
 local statusBase = ""
 local statusActive = false
+local totalRemoteCalls = 0
+local completedRemoteCalls = 0
 
 task.spawn(function()
     local dotStates = {".  ", ".. ", "..."}
@@ -194,6 +211,12 @@ task.spawn(function()
         if statusActive then
             index = index % 3 + 1
             StatusText.Text = statusBase .. dotStates[index]
+            local remaining = totalRemoteCalls - completedRemoteCalls
+            if totalRemoteCalls > 0 and remaining > 0 then
+                ETAText.Text = "Estimate: " .. remaining .. "s"
+            else
+                ETAText.Text = ""
+            end
         end
         task.wait(0.5)
     end
@@ -314,6 +337,11 @@ submitButton.MouseButton1Click:Connect(function()
         local savedProperties = {}
         local savedBehaviours = {}
 
+        local function updateETA()
+            local remaining = totalRemoteCalls - completedRemoteCalls
+            StatusText.Text = statusBase .. " | ETA: " .. remaining .. "s"
+        end
+
         local hasAdvancedTools = workspace.Gamepasses.AdvancedTools:FindFirstChild(game.Players.LocalPlayer.Name) ~= nil
 
         local advancedToolsParts = {
@@ -387,7 +415,7 @@ submitButton.MouseButton1Click:Connect(function()
 
                 for _, child in ipairs(part:GetChildren()) do
                     if child:IsA("NumberValue") or child:IsA("StringValue") or child:IsA("BoolValue") then
-                        if child.Name:lower() ~= "active" then
+                        if child.Name:lower() ~= "active" and child.Name:lower() ~= "m1" and child.Name:lower() ~= "m2"then
                             table.insert(savedBehaviours[part.Name], {
                                 valueName = child.Name,
                                 value = child.Value
@@ -440,8 +468,18 @@ submitButton.MouseButton1Click:Connect(function()
                     propCounts[key] = (propCounts[key] or 0) + 1
                 end
             end
+            local sortedProps = {}
             for key, count in pairs(propCounts) do
-                print(key .. " | x" .. count)
+                local propType = key:match("^(.-)%s*=")
+                table.insert(sortedProps, {key = key, count = count, propType = propType or key})
+            end
+            table.sort(sortedProps, function(a, b)
+                if a.propType ~= b.propType then return a.propType < b.propType end
+                if a.count ~= b.count then return a.count > b.count end
+                return a.key < b.key
+            end)
+            for _, entry in ipairs(sortedProps) do
+                print(entry.key .. " | x" .. entry.count)
             end
 
             print("=== Unique Behaviours ===")
@@ -452,9 +490,20 @@ submitButton.MouseButton1Click:Connect(function()
                     behavCounts[key] = (behavCounts[key] or 0) + 1
                 end
             end
+            local sortedBehavDebug = {}
             for key, count in pairs(behavCounts) do
-                print(key .. " | x" .. count)
+                local behavType = key:match("^(.-)%s*=")
+                table.insert(sortedBehavDebug, {key = key, count = count, behavType = behavType or key})
             end
+            table.sort(sortedBehavDebug, function(a, b)
+                if a.behavType ~= b.behavType then return a.behavType < b.behavType end
+                if a.count ~= b.count then return a.count > b.count end
+                return a.key < b.key
+            end)
+            for _, entry in ipairs(sortedBehavDebug) do
+                print(entry.key .. " | x" .. entry.count)
+            end
+
             local totalPropBatches = 0
             for _ in pairs(propCounts) do
                 totalPropBatches += 1
@@ -467,6 +516,25 @@ submitButton.MouseButton1Click:Connect(function()
 
             print("=== Total Property Batches: " .. totalPropBatches .. " ===")
             print("=== Total Behaviour Batches: " .. totalBehavBatches .. " ===")
+
+            -- estimate total remote calls
+            local MAX_BATCH = 1000
+            local estimatedCalls = 0
+            for _, entry in ipairs(sortedParts) do
+                estimatedCalls = estimatedCalls + 1 -- AddObject
+                estimatedCalls = estimatedCalls + math.ceil(entry.count / MAX_BATCH) -- CloneObject
+            end
+            estimatedCalls = estimatedCalls + 1 -- DeleteObject pass
+            -- MoveObject batches
+            for _, entry in ipairs(sortedParts) do
+                estimatedCalls = estimatedCalls + math.ceil(entry.count / MAX_BATCH)
+            end
+            -- Property batches
+            estimatedCalls = estimatedCalls + totalPropBatches
+            -- Behaviour batches
+            estimatedCalls = estimatedCalls + totalBehavBatches
+            totalRemoteCalls = estimatedCalls
+            print("=== Estimated Remote Calls: " .. estimatedCalls .. " ===")
             print("=== End Debug ===")
             -- Debug: print all unique properties and behaviours
 
@@ -480,7 +548,7 @@ submitButton.MouseButton1Click:Connect(function()
                     statusActive = false
                     return
                 end
-                statusBase = "Placing: " .. partName ..
+                statusBase = "Placing: " .. partName
                 statusActive = true
         
                 local spawnX = math.random(myArea.Position.X - (myArea.Size.X / 2 - 10), myArea.Position.X + (myArea.Size.X / 2 - 10))
@@ -502,6 +570,7 @@ submitButton.MouseButton1Click:Connect(function()
                     task.wait(1)
                     partMade = game:GetService("ReplicatedStorage").Events.AddObject:InvokeServer(unpack(args))
                 end
+                completedRemoteCalls = completedRemoteCalls + 1
             end
 
             local originalParts = {}
@@ -616,6 +685,7 @@ submitButton.MouseButton1Click:Connect(function()
                         task.wait(1)
                         cloneMade = game:GetService("ReplicatedStorage").Events.CloneObject:InvokeServer(unpack(args))
                     end
+                    completedRemoteCalls = completedRemoteCalls + 1
 
                     left -= batch
                 end
@@ -702,11 +772,20 @@ submitButton.MouseButton1Click:Connect(function()
                                 local transformData = savedTransforms[partName][index]
                                 local propertyData = savedProperties[partName][index]
 
+                                local targetCF = myGateCF * transformData.relative
+                                local movement = transformData.movement
+                                local finalCF = targetCF
+
+                                if movement then
+                                    local transformedM1 = myGateCF * (tGateCF:Inverse() * CFrame.new(movement[1]))
+                                    finalCF = transformedM1
+                                end
+
                                 table.insert(allMoves[partName], {
                                     clone = resolvedInst,
-                                    targetCF = myGateCF * transformData.relative,
+                                    targetCF = finalCF,
                                     size = transformData.size,
-                                    movement = transformData.movement,
+                                    movement = movement,
                                     properties = propertyData
                                 })
 
@@ -773,9 +852,9 @@ submitButton.MouseButton1Click:Connect(function()
                                 local moveCF
 
                                 if typeof(movePos) == "Vector3" then
-                                    moveCF = CFrame.new(movePos)
+                                    moveCF = myGateCF * (tGateCF:Inverse() * CFrame.new(movePos))
                                 else
-                                    moveCF = movePos
+                                    moveCF = myGateCF * (tGateCF:Inverse() * movePos)
                                 end
 
                                 if not isInsideArea(moveCF, size, myArea) then
@@ -787,17 +866,22 @@ submitButton.MouseButton1Click:Connect(function()
 
                         if inside then
                             if data.movement then
+                                local convertedMovement = {}
+                                for _, v in ipairs(data.movement) do
+                                    local transformed = myGateCF * (tGateCF:Inverse() * CFrame.new(v))
+                                    table.insert(convertedMovement, vector.create(transformed.X, transformed.Y, transformed.Z))
+                                end
                                 table.insert(batch, {
                                     data.clone,
-                                    data.targetCF,
-                                    data.size,
-                                    data.movement
+                                    CFrame.new(convertedMovement[1].x, convertedMovement[1].y, convertedMovement[1].z),
+                                    vector.create(data.size.X, data.size.Y, data.size.Z),
+                                    convertedMovement
                                 })
                             else
                                 table.insert(batch, {
                                     data.clone,
                                     data.targetCF,
-                                    data.size
+                                    vector.create(data.size.X, data.size.Y, data.size.Z)
                                 })
                             end
                         else
@@ -823,9 +907,8 @@ submitButton.MouseButton1Click:Connect(function()
                         end
                         task.wait(1)
                         MoveObject = game:GetService("ReplicatedStorage").Events.MoveObject:InvokeServer(batch)
-                        print(partName)
-                        print(MoveObject)
                     end
+                    completedRemoteCalls = completedRemoteCalls + 1
 
                     i += MAX_BATCH
 
@@ -994,6 +1077,7 @@ submitButton.MouseButton1Click:Connect(function()
                         task.wait(1)
                         result = PaintRemote:InvokeServer(batch, property, sendValue)
                     end
+                    completedRemoteCalls = completedRemoteCalls + 1
 
                     processed += #batch
                     i += MAX_BATCH
@@ -1013,6 +1097,7 @@ submitButton.MouseButton1Click:Connect(function()
                 end
             end
 
+            local addedToBehaviour = {}
             for _, group in pairs(allMoves) do
                 for _, data in ipairs(group) do
                     local clone = data.clone
@@ -1020,7 +1105,9 @@ submitButton.MouseButton1Click:Connect(function()
                     if partBehaviours then
                         for _, entry in ipairs(partBehaviours) do
                             local key = tostring(entry.valueName) .. "|" .. tostring(entry.value)
-                            if behaviourBatches[key] then
+                            local dedupKey = tostring(clone) .. "|" .. key
+                            if behaviourBatches[key] and not addedToBehaviour[dedupKey] then
+                                addedToBehaviour[dedupKey] = true
                                 table.insert(behaviourBatches[key].parts, clone)
                             end
                         end
@@ -1044,13 +1131,13 @@ submitButton.MouseButton1Click:Connect(function()
             end
 
             table.sort(sortedBehaviours, function(a, b)
+                if a.data.valueName ~= b.data.valueName then
+                    return a.data.valueName < b.data.valueName
+                end
                 local totalA = valueNameTotals[a.data.valueName]
                 local totalB = valueNameTotals[b.data.valueName]
                 if totalA ~= totalB then
                     return totalA > totalB
-                end
-                if a.data.valueName ~= b.data.valueName then
-                    return a.data.valueName < b.data.valueName
                 end
                 return tostring(a.data.value) < tostring(b.data.value)
             end)
@@ -1058,9 +1145,7 @@ submitButton.MouseButton1Click:Connect(function()
             statusBase = "Status: Syncing Behaviours"
             statusActive = true
 
-            local BehaviourRemote = game:GetService("ReplicatedStorage")
-                :WaitForChild("Events")
-                :WaitForChild("BehaviourObject")
+            local BehaviourRemote = game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("BehaviourObject")
 
             for _, entry in ipairs(sortedBehaviours) do
                 local valueName = entry.data.valueName
@@ -1095,6 +1180,7 @@ submitButton.MouseButton1Click:Connect(function()
                         task.wait(1)
                         result = BehaviourRemote:InvokeServer(batch, valueName, value)
                     end
+                    completedRemoteCalls = completedRemoteCalls + 1
 
                     i += MAX_BATCH
                 end
