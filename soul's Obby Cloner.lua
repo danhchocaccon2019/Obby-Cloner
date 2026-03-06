@@ -211,8 +211,8 @@ task.spawn(function()
         if statusActive then
             index = index % 3 + 1
             StatusText.Text = statusBase .. dotStates[index]
-            local remaining = totalRemoteCalls - completedRemoteCalls
-            if totalRemoteCalls > 0 and remaining > 0 then
+            local remaining = math.max(0, totalRemoteCalls - completedRemoteCalls)
+            if totalRemoteCalls > 0 then
                 ETAText.Text = "Estimate: " .. remaining .. "s"
             else
                 ETAText.Text = ""
@@ -1209,7 +1209,16 @@ submitButton.MouseButton1Click:Connect(function()
                     statusBase = "Behaviour: " .. valueName .. " = " .. tostring(value) .. " | " .. i .. "/" .. total
                     statusActive = true
 
-                    local result = BehaviourRemote:InvokeServer(batch, valueName, value)
+                    local vType = entry.data.valueType
+                    local sendValue = value
+                    if vType == "Vector3Value" then
+                        local transformed = myGateCF * (tGateCF:Inverse() * CFrame.new(value))
+                        sendValue = vector.create(transformed.X, transformed.Y, transformed.Z)
+                    elseif vType == "Color3Value" then
+                        sendValue = Color3.new(value.R, value.G, value.B)
+                    end
+
+                    local result = BehaviourRemote:InvokeServer(batch, valueName, sendValue)
 
                     while result ~= true do
                         if cancelCopying then
@@ -1219,7 +1228,7 @@ submitButton.MouseButton1Click:Connect(function()
                             return
                         end
                         task.wait(1)
-                        result = BehaviourRemote:InvokeServer(batch, valueName, value)
+                        result = BehaviourRemote:InvokeServer(batch, valueName, sendValue)
                     end
                     completedRemoteCalls = completedRemoteCalls + 1
 
