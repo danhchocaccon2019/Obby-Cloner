@@ -217,7 +217,9 @@ task.spawn(function()
             else
                 ETAText.Text = ""
             end
-        end
+        else
+        ETAText.Text = ""
+    end
         task.wait(0.5)
     end
 end)
@@ -304,11 +306,17 @@ cancelButton.Visible = false
 
 cancelButton.MouseButton1Click:Connect(function()
     cancelCopying = true
+    statusActive = false
+    totalRemoteCalls = 0
+    completedRemoteCalls = 0
+    ETAText.Text = ""
     cancelButton.Visible = false
     submitButton.Visible = true
 end)
 
 submitButton.MouseButton1Click:Connect(function()
+    completedRemoteCalls = 0
+    totalRemoteCalls = 0
     cancelCopying = false
     submitButton.Visible = false
     cancelButton.Visible = true
@@ -320,6 +328,7 @@ submitButton.MouseButton1Click:Connect(function()
             if cancelCopying then
                 StatusText.Text = "Status: Idle   "
                 statusActive = false
+                ETAText.Text = ""
                 return
             end
             statusBase = "Status: Clearing Obby"
@@ -413,16 +422,19 @@ submitButton.MouseButton1Click:Connect(function()
                     Water = part:FindFirstChild("AttributeLinks") and part.AttributeLinks:FindFirstChild("Water") ~= nil
                 })
 
+                local instanceBehaviours = {}
                 for _, child in ipairs(part:GetChildren()) do
-                    if child:IsA("NumberValue") or child:IsA("StringValue") or child:IsA("BoolValue") then
-                        if child.Name:lower() ~= "active" and child.Name:lower() ~= "m1" and child.Name:lower() ~= "m2"then
-                            table.insert(savedBehaviours[part.Name], {
+                    if child:IsA("BoolValue") or child:IsA("Color3Value") or child:IsA("NumberValue") or child:IsA("StringValue") or child:IsA("Vector3Value") then
+                        if child.Name:lower() ~= "active" and child.Name:lower() ~= "m1" and child.Name:lower() ~= "m2" then
+                            table.insert(instanceBehaviours, {
                                 valueName = child.Name,
-                                value = child.Value
+                                value = child.Value,
+                                valueType = child.ClassName
                             })
                         end
                     end
                 end
+                table.insert(savedBehaviours[part.Name], instanceBehaviours)
 
                 if part:IsA("BasePart") then
                     partCounts[part.Name] = (partCounts[part.Name] or 0) + 1
@@ -485,9 +497,11 @@ submitButton.MouseButton1Click:Connect(function()
             print("=== Unique Behaviours ===")
             local behavCounts = {}
             for partName, list in pairs(savedBehaviours) do
-                for _, entry in ipairs(list) do
-                    local key = entry.valueName .. " = " .. tostring(entry.value)
-                    behavCounts[key] = (behavCounts[key] or 0) + 1
+                for _, instanceBehaviours in ipairs(list) do
+                    for _, entry in ipairs(instanceBehaviours) do
+                        local key = entry.valueName .. " = " .. tostring(entry.value)
+                        behavCounts[key] = (behavCounts[key] or 0) + 1
+                    end
                 end
             end
             local sortedBehavDebug = {}
@@ -535,6 +549,11 @@ submitButton.MouseButton1Click:Connect(function()
             estimatedCalls = estimatedCalls + totalBehavBatches
             totalRemoteCalls = estimatedCalls
             print("=== Estimated Remote Calls: " .. estimatedCalls .. " ===")
+
+            for _, entry in ipairs(sortedParts) do
+                print(entry.name .. ": " .. entry.count)
+            end
+            
             print("=== End Debug ===")
             -- Debug: print all unique properties and behaviours
 
@@ -546,6 +565,7 @@ submitButton.MouseButton1Click:Connect(function()
                 if cancelCopying then
                     StatusText.Text = "Status: Idle   "
                     statusActive = false
+                    ETAText.Text = ""
                     return
                 end
                 statusBase = "Placing: " .. partName
@@ -565,6 +585,7 @@ submitButton.MouseButton1Click:Connect(function()
                     if cancelCopying then
                         StatusText.Text = "Status: Idle   "
                         statusActive = false
+                        ETAText.Text = ""
                         return
                     end
                     task.wait(1)
@@ -605,6 +626,7 @@ submitButton.MouseButton1Click:Connect(function()
                 if cancelCopying then
                     StatusText.Text = "Status: Idle   "
                     statusActive = false
+                    ETAText.Text = ""
                     return
                 end
 
@@ -634,6 +656,7 @@ submitButton.MouseButton1Click:Connect(function()
                     if cancelCopying then
                         StatusText.Text = "Status: Idle   "
                         statusActive = false
+                        ETAText.Text = ""
                         return
                     end
                     statusBase = "Cloning: " .. name .. " | Remaining: " .. left
@@ -680,6 +703,7 @@ submitButton.MouseButton1Click:Connect(function()
                         if cancelCopying then
                             StatusText.Text = "Status: Idle   "
                             statusActive = false
+                            ETAText.Text = ""
                             return
                         end
                         task.wait(1)
@@ -698,6 +722,7 @@ submitButton.MouseButton1Click:Connect(function()
                     if cancelCopying then
                         StatusText.Text = "Status: Idle   "
                         statusActive = false
+                        ETAText.Text = ""
                         return
                     end
                     local stillThere = {}
@@ -781,12 +806,15 @@ submitButton.MouseButton1Click:Connect(function()
                                     finalCF = transformedM1
                                 end
 
+                                local behaviourData = savedBehaviours[partName][index] or {}
+
                                 table.insert(allMoves[partName], {
                                     clone = resolvedInst,
                                     targetCF = finalCF,
                                     size = transformData.size,
                                     movement = movement,
-                                    properties = propertyData
+                                    properties = propertyData,
+                                    behaviours = behaviourData
                                 })
 
                                 index += 1
@@ -829,6 +857,7 @@ submitButton.MouseButton1Click:Connect(function()
                     if cancelCopying then
                         StatusText.Text = "Status: Idle   "
                         statusActive = false
+                        ETAText.Text = ""
                         return
                     end
 
@@ -903,6 +932,7 @@ submitButton.MouseButton1Click:Connect(function()
                         if cancelCopying then
                             StatusText.Text = "Status: Idle   "
                             statusActive = false
+                            ETAText.Text = ""
                             return
                         end
                         task.wait(1)
@@ -1034,6 +1064,7 @@ submitButton.MouseButton1Click:Connect(function()
                     if cancelCopying then
                         StatusText.Text = "Status: Idle   "
                         statusActive = false
+                        ETAText.Text = ""
                         return
                     end
 
@@ -1060,7 +1091,7 @@ submitButton.MouseButton1Click:Connect(function()
                     end
 
                     statusBase =
-                        "Syncing: " ..
+                        "Properties: " ..
                         property ..
                         " = " ..
                         tostring(displayValue) ..
@@ -1086,30 +1117,38 @@ submitButton.MouseButton1Click:Connect(function()
 
             local behaviourBatches = {}
 
-            for partName, list in pairs(savedBehaviours) do
-                for _, entry in ipairs(list) do
-                    local key = tostring(entry.valueName) .. "|" .. tostring(entry.value)
-                    behaviourBatches[key] = behaviourBatches[key] or {
-                        valueName = entry.valueName,
-                        value = entry.value,
-                        parts = {}
-                    }
-                end
-            end
-
-            local addedToBehaviour = {}
             for _, group in pairs(allMoves) do
                 for _, data in ipairs(group) do
                     local clone = data.clone
-                    local partBehaviours = savedBehaviours[clone.Name]
-                    if partBehaviours then
-                        for _, entry in ipairs(partBehaviours) do
-                            local key = tostring(entry.valueName) .. "|" .. tostring(entry.value)
-                            local dedupKey = tostring(clone) .. "|" .. key
-                            if behaviourBatches[key] and not addedToBehaviour[dedupKey] then
-                                addedToBehaviour[dedupKey] = true
-                                table.insert(behaviourBatches[key].parts, clone)
+                    local instanceBehaviours = data.behaviours
+                    if instanceBehaviours then
+                        for _, entry in ipairs(instanceBehaviours) do
+                            local valueType = entry.valueType
+                            local value = entry.value
+
+                            local keyValue
+                            if valueType == "Color3Value" then
+                                keyValue = string.format("%d_%d_%d",
+                                    math.floor(value.R*255),
+                                    math.floor(value.G*255),
+                                    math.floor(value.B*255)
+                                )
+                            elseif valueType == "Vector3Value" then
+                                keyValue = string.format("%.3f_%.3f_%.3f", value.X, value.Y, value.Z)
+                            else
+                                keyValue = tostring(value)
                             end
+
+                            local key = tostring(entry.valueName) .. "|" .. keyValue
+                            if not behaviourBatches[key] then
+                                behaviourBatches[key] = {
+                                    valueName = entry.valueName,
+                                    value = value,
+                                    valueType = valueType,
+                                    parts = {}
+                                }
+                            end
+                            table.insert(behaviourBatches[key].parts, clone)
                         end
                     end
                 end
@@ -1158,6 +1197,7 @@ submitButton.MouseButton1Click:Connect(function()
                     if cancelCopying then
                         StatusText.Text = "Status: Idle   "
                         statusActive = false
+                        ETAText.Text = ""
                         return
                     end
 
@@ -1175,6 +1215,7 @@ submitButton.MouseButton1Click:Connect(function()
                         if cancelCopying then
                             StatusText.Text = "Status: Idle   "
                             statusActive = false
+                            ETAText.Text = ""
                             return
                         end
                         task.wait(1)
@@ -1192,4 +1233,5 @@ submitButton.MouseButton1Click:Connect(function()
     submitButton.Visible = true
     StatusText.Text = "Status: Idle   "
     statusActive = false
+    ETAText.Text = ""
 end)
