@@ -843,129 +843,6 @@ submitButton.MouseButton1Click:Connect(function()
                 return a.name < b.name
             end)
 
-            statusBase = "Status: Moving Parts"
-            statusActive = true
-            local MAX_BATCH = 1000
-            local DeleteRemote = game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("DeleteObject")
-
-            for _, entry in ipairs(sortedMoveGroups) do
-                local partName = entry.name
-                local group = entry.group
-                local i = 1
-
-                while i <= #group do
-                    if cancelCopying then
-                        StatusText.Text = "Status: Idle   "
-                        statusActive = false
-                        ETAText.Text = ""
-                        return
-                    end
-
-                    local batch = {}
-                    local deleteBatch = {}
-                    for j = i, math.min(i + MAX_BATCH - 1, #group) do
-                        local data = group[j]
-                        local targetCF = data.targetCF
-                        local size = data.size
-
-                        local inside = true
-
-                        -- Check main position
-                        if not isInsideArea(targetCF, size, myArea) then
-                            inside = false
-                        end
-
-                        -- If moving part, check both movement CFrames
-                        if inside and data.movement then
-                            for _, movePos in ipairs(data.movement) do
-                                local moveCF
-
-                                if typeof(movePos) == "Vector3" then
-                                    moveCF = myGateCF * (tGateCF:Inverse() * CFrame.new(movePos))
-                                else
-                                    moveCF = myGateCF * (tGateCF:Inverse() * movePos)
-                                end
-
-                                if not isInsideArea(moveCF, size, myArea) then
-                                    inside = false
-                                    break
-                                end
-                            end
-                        end
-
-                        if inside then
-                            if data.movement then
-                                local convertedMovement = {}
-                                for _, v in ipairs(data.movement) do
-                                    local transformed = myGateCF * (tGateCF:Inverse() * CFrame.new(v))
-                                    table.insert(convertedMovement, vector.create(transformed.X, transformed.Y, transformed.Z))
-                                end
-                                table.insert(batch, {
-                                    data.clone,
-                                    CFrame.new(convertedMovement[1].x, convertedMovement[1].y, convertedMovement[1].z),
-                                    vector.create(data.size.X, data.size.Y, data.size.Z),
-                                    convertedMovement
-                                })
-                            else
-                                table.insert(batch, {
-                                    data.clone,
-                                    data.targetCF,
-                                    vector.create(data.size.X, data.size.Y, data.size.Z)
-                                })
-                            end
-                        else
-                            table.insert(deleteBatch, data.clone)
-                            print("Skipped (outside area):", partName)
-                        end
-
-                        statusBase = "Moving: " .. partName .. " | " .. j .. "/" .. #group
-                        statusActive = true
-                    end
-
-                    if #batch == 0 then
-                        i += MAX_BATCH
-                        continue
-                    end
-
-                    local MoveObject = game:GetService("ReplicatedStorage").Events.MoveObject:InvokeServer(batch)
-                    while MoveObject ~= true do
-                        if cancelCopying then
-                            StatusText.Text = "Status: Idle   "
-                            statusActive = false
-                            ETAText.Text = ""
-                            return
-                        end
-                        task.wait(1)
-                        MoveObject = game:GetService("ReplicatedStorage").Events.MoveObject:InvokeServer(batch)
-                    end
-                    completedRemoteCalls = completedRemoteCalls + 1
-
-                    i += MAX_BATCH
-
-                    -- Batch delete OOB parts safely
-                    if #deleteBatch > 0 then
-                        local dIndex = 1
-
-                        while dIndex <= #deleteBatch do
-                            local dBatch = {}
-
-                            for j = dIndex, math.min(dIndex + MAX_BATCH - 1, #deleteBatch) do
-                                table.insert(dBatch, deleteBatch[j])
-                            end
-
-                            local result = DeleteRemote:InvokeServer(dBatch)
-
-                            while result ~= true do
-                                task.wait(1)
-                                result = DeleteRemote:InvokeServer(dBatch)
-                            end
-
-                            dIndex += MAX_BATCH
-                        end
-                    end
-                end
-            end
-
             statusBase = "Status: Syncing Properties"
             statusActive = true
 
@@ -1236,6 +1113,129 @@ submitButton.MouseButton1Click:Connect(function()
                         i += MAX_BATCH
                     end
                 end)
+            end
+
+            statusBase = "Status: Moving Parts"
+            statusActive = true
+            local MAX_BATCH = 1000
+            local DeleteRemote = game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("DeleteObject")
+
+            for _, entry in ipairs(sortedMoveGroups) do
+                local partName = entry.name
+                local group = entry.group
+                local i = 1
+
+                while i <= #group do
+                    if cancelCopying then
+                        StatusText.Text = "Status: Idle   "
+                        statusActive = false
+                        ETAText.Text = ""
+                        return
+                    end
+
+                    local batch = {}
+                    local deleteBatch = {}
+                    for j = i, math.min(i + MAX_BATCH - 1, #group) do
+                        local data = group[j]
+                        local targetCF = data.targetCF
+                        local size = data.size
+
+                        local inside = true
+
+                        -- Check main position
+                        if not isInsideArea(targetCF, size, myArea) then
+                            inside = false
+                        end
+
+                        -- If moving part, check both movement CFrames
+                        if inside and data.movement then
+                            for _, movePos in ipairs(data.movement) do
+                                local moveCF
+
+                                if typeof(movePos) == "Vector3" then
+                                    moveCF = myGateCF * (tGateCF:Inverse() * CFrame.new(movePos))
+                                else
+                                    moveCF = myGateCF * (tGateCF:Inverse() * movePos)
+                                end
+
+                                if not isInsideArea(moveCF, size, myArea) then
+                                    inside = false
+                                    break
+                                end
+                            end
+                        end
+
+                        if inside then
+                            if data.movement then
+                                local convertedMovement = {}
+                                for _, v in ipairs(data.movement) do
+                                    local transformed = myGateCF * (tGateCF:Inverse() * CFrame.new(v))
+                                    table.insert(convertedMovement, vector.create(transformed.X, transformed.Y, transformed.Z))
+                                end
+                                table.insert(batch, {
+                                    data.clone,
+                                    CFrame.new(convertedMovement[1].x, convertedMovement[1].y, convertedMovement[1].z),
+                                    vector.create(data.size.X, data.size.Y, data.size.Z),
+                                    convertedMovement
+                                })
+                            else
+                                table.insert(batch, {
+                                    data.clone,
+                                    data.targetCF,
+                                    vector.create(data.size.X, data.size.Y, data.size.Z)
+                                })
+                            end
+                        else
+                            table.insert(deleteBatch, data.clone)
+                            print("Skipped (outside area):", partName)
+                        end
+
+                        statusBase = "Moving: " .. partName .. " | " .. j .. "/" .. #group
+                        statusActive = true
+                    end
+
+                    if #batch == 0 then
+                        i += MAX_BATCH
+                        continue
+                    end
+
+                    local MoveObject = game:GetService("ReplicatedStorage").Events.MoveObject:InvokeServer(batch)
+                    while MoveObject ~= true do
+                        if cancelCopying then
+                            StatusText.Text = "Status: Idle   "
+                            statusActive = false
+                            ETAText.Text = ""
+                            return
+                        end
+                        task.wait(1)
+                        MoveObject = game:GetService("ReplicatedStorage").Events.MoveObject:InvokeServer(batch)
+                    end
+                    completedRemoteCalls = completedRemoteCalls + 1
+
+                    i += MAX_BATCH
+
+                    -- Batch delete OOB parts safely
+                    if #deleteBatch > 0 then
+                        local dIndex = 1
+
+                        while dIndex <= #deleteBatch do
+                            local dBatch = {}
+
+                            for j = dIndex, math.min(dIndex + MAX_BATCH - 1, #deleteBatch) do
+                                table.insert(dBatch, deleteBatch[j])
+                            end
+
+                            local result = DeleteRemote:InvokeServer(dBatch)
+
+                            while result ~= true do
+                                task.wait(1)
+                                result = DeleteRemote:InvokeServer(dBatch)
+                            end
+
+                            dIndex += MAX_BATCH
+                        end
+                    end
+                end
             end
         end
     end
