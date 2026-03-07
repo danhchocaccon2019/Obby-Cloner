@@ -969,9 +969,7 @@ submitButton.MouseButton1Click:Connect(function()
             statusBase = "Status: Syncing Properties"
             statusActive = true
 
-            local PaintRemote = game:GetService("ReplicatedStorage")
-                :WaitForChild("Events")
-                :WaitForChild("PaintObject")
+            local PaintRemote = game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("PaintObject")
 
             local MAX_BATCH = 1000
 
@@ -1034,84 +1032,91 @@ submitButton.MouseButton1Click:Connect(function()
 
             for _, property in ipairs(propertyOrder) do
 
-            local groups = propertyBatches[property]
-            local entries = {}
+                local groups = propertyBatches[property]
+                local entries = {}
 
-            for key, data in pairs(groups) do
-                table.insert(entries, {
-                    key = key,
-                    data = data,
-                    count = #data.parts
-                })
-            end
-
-            table.sort(entries, function(a, b)
-                if a.count ~= b.count then
-                    return a.count > b.count
+                for key, data in pairs(groups) do
+                    table.insert(entries, {
+                        key = key,
+                        data = data,
+                        count = #data.parts
+                    })
                 end
-                return tostring(a.key) < tostring(b.key)
-            end)
 
-            for _, entry in ipairs(entries) do
-                local data = entry.data
-                local value = data.value
-                local parts = data.parts
-                local total = #parts
-                local processed = 0
-
-                local i = 1
-                while i <= total do
-                    if cancelCopying then
-                        StatusText.Text = "Status: Idle   "
-                        statusActive = false
-                        ETAText.Text = ""
-                        return
+                table.sort(entries, function(a, b)
+                    if a.count ~= b.count then
+                        return a.count > b.count
                     end
+                    return tostring(a.key) < tostring(b.key)
+                end)
 
-                    local batch = {}
-                    for j = i, math.min(i + MAX_BATCH - 1, total) do
-                        table.insert(batch, parts[j])
+                for _, entry in ipairs(entries) do
+                    local data = entry.data
+                    local value = data.value
+                    local parts = data.parts
+                    local total = #parts
+                    local processed = 0
+
+                    local i = 1
+                    while i <= total do
+                        if cancelCopying then
+                            StatusText.Text = "Status: Idle   "
+                            statusActive = false
+                            ETAText.Text = ""
+                            return
+                        end
+
+                        local batch = {}
+                        for j = i, math.min(i + MAX_BATCH - 1, total) do
+                            table.insert(batch, parts[j])
+                        end
+
+                        local sendValue = value
+                        if property == "Material"
+                            or property == "Surface"
+                            or property == "Shape" then
+                            sendValue = value.Name
+                        end
+
+                        local displayValue = sendValue
+                        if property == "Color" then
+                            displayValue = string.format(
+                                "RGB(%d,%d,%d)",
+                                math.floor(value.R * 255),
+                                math.floor(value.G * 255),
+                                math.floor(value.B * 255)
+                            )
+                        end
+
+                        statusBase =
+                            "Properties: " ..
+                            property ..
+                            " = " ..
+                            tostring(displayValue) ..
+                            " | " ..
+                            processed ..
+                            "/" ..
+                            total
+
+                        statusActive = true
+
+                        local result = PaintRemote:InvokeServer(batch, property, sendValue)
+
+                        while result ~= true do
+                            if cancelCopying then
+                                StatusText.Text = "Status: Idle   "
+                                statusActive = false
+                                ETAText.Text = ""
+                                return
+                            end
+                            task.wait(0.1)
+                            result = PaintRemote:InvokeServer(batch, property, sendValue)
+                        end
+                        completedRemoteCalls = completedRemoteCalls + 1
+
+                        processed += #batch
+                        i += MAX_BATCH
                     end
-
-                    local sendValue = value
-                    if property == "Material"
-                        or property == "Surface"
-                        or property == "Shape" then
-                        sendValue = value.Name
-                    end
-
-                    local displayValue = sendValue
-                    if property == "Color" then
-                        displayValue = string.format(
-                            "RGB(%d,%d,%d)",
-                            math.floor(value.R * 255),
-                            math.floor(value.G * 255),
-                            math.floor(value.B * 255)
-                        )
-                    end
-
-                    statusBase =
-                        "Properties: " ..
-                        property ..
-                        " = " ..
-                        tostring(displayValue) ..
-                        " | " ..
-                        processed ..
-                        "/" ..
-                        total
-
-                    statusActive = true
-
-                    local result = PaintRemote:InvokeServer(batch, property, sendValue)
-
-                    while result ~= true do
-                        task.wait(1)
-                        result = PaintRemote:InvokeServer(batch, property, sendValue)
-                    end
-                    completedRemoteCalls = completedRemoteCalls + 1
-
-                    processed += #batch
-                    i += MAX_BATCH
                 end
             end
 
@@ -1187,55 +1192,51 @@ submitButton.MouseButton1Click:Connect(function()
             local BehaviourRemote = game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("BehaviourObject")
 
             for _, entry in ipairs(sortedBehaviours) do
-                local valueName = entry.data.valueName
-                local value = entry.data.value
-                local parts = entry.data.parts
-                local total = #parts
-                local i = 1
+                task.spawn(function()
+                    local valueName = entry.data.valueName
+                    local value = entry.data.value
+                    local parts = entry.data.parts
+                    local total = #parts
+                    local i = 1
 
-                while i <= total do
-                    if cancelCopying then
-                        StatusText.Text = "Status: Idle   "
-                        statusActive = false
-                        ETAText.Text = ""
-                        return
-                    end
-
-                    local batch = {}
-                    for j = i, math.min(i + MAX_BATCH - 1, total) do
-                        table.insert(batch, parts[j])
-                    end
-
-                    statusBase = "Behaviour: " .. valueName .. " = " .. tostring(value) .. " | " .. i .. "/" .. total
-                    statusActive = true
-
-                    local vType = entry.data.valueType
-                    local sendValue = value
-                    if vType == "Vector3Value" then
-                        local transformed = myGateCF * (tGateCF:Inverse() * CFrame.new(value))
-                        sendValue = vector.create(transformed.X, transformed.Y, transformed.Z)
-                    elseif vType == "Color3Value" then
-                        sendValue = Color3.new(value.R, value.G, value.B)
-                    end
-
-                    local result = BehaviourRemote:InvokeServer(batch, valueName, sendValue)
-
-                    while result ~= true do
+                    while i <= total do
                         if cancelCopying then
                             StatusText.Text = "Status: Idle   "
                             statusActive = false
                             ETAText.Text = ""
                             return
                         end
-                        task.wait(1)
-                        result = BehaviourRemote:InvokeServer(batch, valueName, sendValue)
-                    end
-                    completedRemoteCalls = completedRemoteCalls + 1
 
-                    i += MAX_BATCH
-                end
+                        local batch = {}
+                        for j = i, math.min(i + MAX_BATCH - 1, total) do
+                            table.insert(batch, parts[j])
+                        end
+
+                        local vType = entry.data.valueType
+                        local sendValue = value
+                        if vType == "Vector3Value" then
+                            local transformed = myGateCF * (tGateCF:Inverse() * CFrame.new(value))
+                            sendValue = vector.create(transformed.X, transformed.Y, transformed.Z)
+                        elseif vType == "Color3Value" then
+                            sendValue = Color3.new(value.R, value.G, value.B)
+                        end
+
+                        local result = BehaviourRemote:InvokeServer(batch, valueName, sendValue)
+                        while result ~= true do
+                            if cancelCopying then
+                                StatusText.Text = "Status: Idle   "
+                                statusActive = false
+                                ETAText.Text = ""
+                                return
+                            end
+                            result = BehaviourRemote:InvokeServer(batch, valueName, sendValue)
+                        end
+                        completedRemoteCalls = completedRemoteCalls + 1
+
+                        i += MAX_BATCH
+                    end
+                end)
             end
-        end
         end
     end
     cancelButton.Visible = false
