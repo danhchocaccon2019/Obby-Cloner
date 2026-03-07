@@ -12,6 +12,24 @@ warn("-+-------=-s͘c͘r͘i͘p͘t͘-b͘e͘g͘i͘n͘-=-------+-")
 print("Thanks Skelly Friend, BLOCKE, gord for inspiring me :> Also thanks sno3iku for supporting me through out the journey :3")
 print("Remember to get 100M Cash before Cloning.")
 
+local ValidBehaviours = nil
+pcall(function()
+    local EffectModule = require(game:GetService("ReplicatedStorage").EffectModule)
+    ValidBehaviours = EffectModule.GetValues()
+end)
+
+local GetModelProps = nil
+pcall(function()
+    GetModelProps = require(game:GetService("ReplicatedStorage").ModelProps)
+end)
+
+local function getModelDefaults(partName)
+    if not GetModelProps then return nil end
+    local ok, result = pcall(GetModelProps, partName)
+    if ok then return result end
+    return nil
+end
+
 local ui = Instance.new("ScreenGui")
 ui.Parent = game.Players.LocalPlayer.PlayerGui
 ui.ResetOnSpawn = false
@@ -345,6 +363,7 @@ submitButton.MouseButton1Click:Connect(function()
         local savedTransforms = {}
         local savedProperties = {}
         local savedBehaviours = {}
+        local savedButtonLinks = {}
 
         local function updateETA()
             local remaining = totalRemoteCalls - completedRemoteCalls
@@ -363,6 +382,10 @@ submitButton.MouseButton1Click:Connect(function()
             return advancedToolsParts[name] and not hasAdvancedTools
         end
 
+        local function isValidBehaviour(name)
+            return ValidBehaviours[name] ~= nil
+        end
+
         if playerObby and playerObby.Items and playerObby.Items.Parts and localPlayerObby then
             local gatePosition = localPlayerObby.GetObby.Gate.Position
             local obbyParts = {}
@@ -374,7 +397,10 @@ submitButton.MouseButton1Click:Connect(function()
                         elseif obj:IsA("Model") then
                             local part = obj:FindFirstChild(obj.Name)
                             if part and part:IsA("BasePart") then
-                                table.insert(obbyParts, part)
+                                local modelProps = getModelDefaults(obj.Name)
+                                if modelProps ~= nil then
+                                    table.insert(obbyParts, part)
+                                end
                             end
                         end
                     end
@@ -388,6 +414,7 @@ submitButton.MouseButton1Click:Connect(function()
                 savedTransforms[part.Name] = savedTransforms[part.Name] or {}
                 savedProperties[part.Name] = savedProperties[part.Name] or {}
                 savedBehaviours[part.Name] = savedBehaviours[part.Name] or {}
+                savedButtonLinks[part.Name] = savedButtonLinks[part.Name] or {}
 
                 local movementData = nil
 
@@ -406,7 +433,8 @@ submitButton.MouseButton1Click:Connect(function()
                 table.insert(savedTransforms[part.Name], {
                     relative = tGateCF:Inverse() * partCFrame,
                     size = part.Size,
-                    movement = movementData
+                    movement = movementData,
+                    originalInst = part
                 })
 
                 table.insert(savedProperties[part.Name], {
@@ -416,16 +444,17 @@ submitButton.MouseButton1Click:Connect(function()
                     CastShadow = part.CastShadow,
                     Reflectance = part.Reflectance,
                     Transparency = part.Transparency,
-                    Surface = part.TopSurface,
+                    Surface = part.FrontSurface,
                     Shape = part:IsA("Part") and part.Shape or nil,
                     Slipperiness = part.CustomPhysicalProperties and part.CustomPhysicalProperties.FrictionWeight or 0,
-                    Water = part:FindFirstChild("AttributeLinks") and part.AttributeLinks:FindFirstChild("Water") ~= nil
+                    Water = part:FindFirstChild("AttributeLinks") and part.AttributeLinks:FindFirstChild("Water") ~= nil,
+                    Style = part:IsA("TrussPart") and part.Style or nil
                 })
 
                 local instanceBehaviours = {}
                 for _, child in ipairs(part:GetChildren()) do
                     if child:IsA("BoolValue") or child:IsA("Color3Value") or child:IsA("NumberValue") or child:IsA("StringValue") or child:IsA("Vector3Value") then
-                        if child.Name:lower() ~= "active" and child.Name:lower() ~= "m1" and child.Name:lower() ~= "m2" then
+                        if child.Name:lower() ~= "active" and child.Name:lower() ~= "m1" and child.Name:lower() ~= "m2" and (ValidBehaviours == nil or isValidBehaviour(child.Name)) then
                             table.insert(instanceBehaviours, {
                                 valueName = child.Name,
                                 value = child.Value,
@@ -435,6 +464,18 @@ submitButton.MouseButton1Click:Connect(function()
                     end
                 end
                 table.insert(savedBehaviours[part.Name], instanceBehaviours)
+
+                local actualInst = part.Parent:IsA("Model") and part.Parent or part
+                local buttonsFolder = actualInst:FindFirstChild("Buttons")
+                if buttonsFolder then
+                    for _, objVal in ipairs(buttonsFolder:GetChildren()) do
+                        if objVal:IsA("ObjectValue") and objVal.Value then
+                            local buttonPart = objVal.Value
+                            savedButtonLinks[buttonPart] = savedButtonLinks[buttonPart] or {}
+                            table.insert(savedButtonLinks[buttonPart], part)
+                        end
+                    end
+                end
 
                 if part:IsA("BasePart") then
                     partCounts[part.Name] = (partCounts[part.Name] or 0) + 1
@@ -471,7 +512,7 @@ submitButton.MouseButton1Click:Connect(function()
                     CastShadow = tostring(part.CastShadow),
                     Reflectance = tostring(part.Reflectance),
                     Transparency = tostring(part.Transparency),
-                    Surface = part.TopSurface.Name,
+                    Surface = part.FrontSurface.Name,
                     Shape = part:IsA("Part") and part.Shape.Name or "N/A",
                     Slipperiness = tostring(part.CustomPhysicalProperties and part.CustomPhysicalProperties.FrictionWeight or 0),
                 }
@@ -588,32 +629,9 @@ submitButton.MouseButton1Click:Connect(function()
                         ETAText.Text = ""
                         return
                     end
-                    task.wait(1)
                     partMade = game:GetService("ReplicatedStorage").Events.AddObject:InvokeServer(unpack(args))
                 end
                 completedRemoteCalls = completedRemoteCalls + 1
-            end
-
-            local originalParts = {}
-            for name, _ in pairs(partCounts) do
-                local inst = nil
-                for _, folder in ipairs(localPlayerObby.Items:GetChildren()) do
-                    if folder:IsA("Folder") then
-                        local found = folder:FindFirstChild(name)
-                        if found then
-                            if found:IsA("Model") then
-                                inst = found:FindFirstChild(name)
-                            else
-                                inst = found
-                            end
-                            break
-                        end
-                    end
-                end
-
-                if inst then
-                    table.insert(originalParts, inst)
-                end
             end
 
             statusBase = "Status: Cloning Parts"
@@ -648,7 +666,11 @@ submitButton.MouseButton1Click:Connect(function()
 
                 if not partInst then continue end
 
-                local left = count
+                local left = count - 1
+                if left <= 0 then
+                    completedRemoteCalls = completedRemoteCalls + 1
+                    continue
+                end
 
                 statusBase = "Cloning: " .. name .. " x" .. count
                 statusActive = true
@@ -706,43 +728,11 @@ submitButton.MouseButton1Click:Connect(function()
                             ETAText.Text = ""
                             return
                         end
-                        task.wait(1)
                         cloneMade = game:GetService("ReplicatedStorage").Events.CloneObject:InvokeServer(unpack(args))
                     end
                     completedRemoteCalls = completedRemoteCalls + 1
 
                     left -= batch
-                end
-            end
-
-            statusBase = "Status: Deleting Originals"
-            statusActive = true
-            if #originalParts > 0 then
-                while true do
-                    if cancelCopying then
-                        StatusText.Text = "Status: Idle   "
-                        statusActive = false
-                        ETAText.Text = ""
-                        return
-                    end
-                    local stillThere = {}
-                    statusBase = "Deleting: " .. #stillThere .. " remaining"
-                    statusActive = true
-
-                    for _, inst in ipairs(originalParts) do
-                        if inst and inst.Parent then
-                            table.insert(stillThere, inst)
-                        end
-                    end
-
-                    if #stillThere == 0 then
-                        break
-                    end
-
-                    local args = {stillThere}
-                    game:GetService("ReplicatedStorage").Events.DeleteObject:InvokeServer(unpack(args))
-
-                    task.wait(1)
                 end
             end
 
@@ -810,6 +800,7 @@ submitButton.MouseButton1Click:Connect(function()
 
                                 table.insert(allMoves[partName], {
                                     clone = resolvedInst,
+                                    originalInst = transformData.originalInst,
                                     targetCF = finalCF,
                                     size = transformData.size,
                                     movement = movement,
@@ -860,7 +851,8 @@ submitButton.MouseButton1Click:Connect(function()
                 Surface = {},
                 Shape = {},
                 Slipperiness = {},
-                Water = {}
+                Water = {},
+                Style = {}
             }
 
             local propertyOrder = {
@@ -873,7 +865,8 @@ submitButton.MouseButton1Click:Connect(function()
                 "Surface",
                 "Shape",
                 "Slipperiness",
-                "Water"
+                "Water",
+                "Style"
             }
 
             -- Build per-property batches with exact mapping
@@ -892,7 +885,7 @@ submitButton.MouseButton1Click:Connect(function()
                                 math.floor(value.G*255),
                                 math.floor(value.B*255)
                             )
-                        elseif property == "Material" or property == "Surface" or property == "Shape" then
+                        elseif property == "Material" or property == "Surface" or property == "Shape" or property == "Style" then
                             key = value.Name
                         end
 
@@ -949,9 +942,7 @@ submitButton.MouseButton1Click:Connect(function()
                         end
 
                         local sendValue = value
-                        if property == "Material"
-                            or property == "Surface"
-                            or property == "Shape" then
+                        if property == "Material" or property == "Surface" or property == "Shape" or property == "Style" then
                             sendValue = value.Name
                         end
 
@@ -986,7 +977,6 @@ submitButton.MouseButton1Click:Connect(function()
                                 ETAText.Text = ""
                                 return
                             end
-                            task.wait(0.1)
                             result = PaintRemote:InvokeServer(batch, property, sendValue)
                         end
                         completedRemoteCalls = completedRemoteCalls + 1
@@ -1069,50 +1059,92 @@ submitButton.MouseButton1Click:Connect(function()
             local BehaviourRemote = game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("BehaviourObject")
 
             for _, entry in ipairs(sortedBehaviours) do
-                task.spawn(function()
-                    local valueName = entry.data.valueName
-                    local value = entry.data.value
-                    local parts = entry.data.parts
-                    local total = #parts
-                    local i = 1
+                local valueName = entry.data.valueName
+                local value = entry.data.value
+                local parts = entry.data.parts
+                local total = #parts
+                local i = 1
 
-                    while i <= total do
+                while i <= total do
+                    if cancelCopying then
+                        StatusText.Text = "Status: Idle   "
+                        statusActive = false
+                        ETAText.Text = ""
+                        return
+                    end
+
+                    local batch = {}
+                    for j = i, math.min(i + MAX_BATCH - 1, total) do
+                        table.insert(batch, parts[j])
+                    end
+
+                    local vType = entry.data.valueType
+                    local sendValue = value
+                    if vType == "Vector3Value" then
+                        local transformed = myGateCF * (tGateCF:Inverse() * CFrame.new(value))
+                        sendValue = vector.create(transformed.X, transformed.Y, transformed.Z)
+                    elseif vType == "Color3Value" then
+                        sendValue = Color3.new(value.R, value.G, value.B)
+                    end
+
+                    statusBase = "Behaviours: " .. valueName .. " = " .. tostring(sendValue) .. " | " .. i .. "/" .. total
+                    statusActive = true
+
+                    local result = BehaviourRemote:InvokeServer(batch, valueName, sendValue)
+                    while result ~= true do
                         if cancelCopying then
                             StatusText.Text = "Status: Idle   "
                             statusActive = false
                             ETAText.Text = ""
                             return
                         end
-
-                        local batch = {}
-                        for j = i, math.min(i + MAX_BATCH - 1, total) do
-                            table.insert(batch, parts[j])
-                        end
-
-                        local vType = entry.data.valueType
-                        local sendValue = value
-                        if vType == "Vector3Value" then
-                            local transformed = myGateCF * (tGateCF:Inverse() * CFrame.new(value))
-                            sendValue = vector.create(transformed.X, transformed.Y, transformed.Z)
-                        elseif vType == "Color3Value" then
-                            sendValue = Color3.new(value.R, value.G, value.B)
-                        end
-
-                        local result = BehaviourRemote:InvokeServer(batch, valueName, sendValue)
-                        while result ~= true do
-                            if cancelCopying then
-                                StatusText.Text = "Status: Idle   "
-                                statusActive = false
-                                ETAText.Text = ""
-                                return
-                            end
-                            result = BehaviourRemote:InvokeServer(batch, valueName, sendValue)
-                        end
-                        completedRemoteCalls = completedRemoteCalls + 1
-
-                        i += MAX_BATCH
+                        result = BehaviourRemote:InvokeServer(batch, valueName, sendValue)
                     end
-                end)
+                    completedRemoteCalls = completedRemoteCalls + 1
+
+                    i += MAX_BATCH
+                end
+            end
+
+            local originalToClone = {}
+            for _, group in pairs(allMoves) do
+                for _, moveData in ipairs(group) do
+                    if moveData.originalInst then
+                        originalToClone[moveData.originalInst] = moveData.clone
+                    end
+                end
+            end
+
+            statusBase = "Status: Syncing Button Links"
+            statusActive = true
+
+            local UpdateButton = game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("UpdateButton")
+
+            for originalButton, linkedOriginals in pairs(savedButtonLinks) do
+                if cancelCopying then
+                    StatusText.Text = "Status: Idle   "
+                    statusActive = false
+                    ETAText.Text = ""
+                    return
+                end
+
+                local clonedButton = originalToClone[originalButton]
+                if not clonedButton then continue end
+
+                local linkedClones = {}
+                for _, origPart in ipairs(linkedOriginals) do
+                    local cloned = originalToClone[origPart]
+                    if cloned then
+                        table.insert(linkedClones, cloned)
+                    end
+                end
+
+                if #linkedClones == 0 then continue end
+
+                statusBase = "Button: " .. clonedButton.Name .. " -> " .. #linkedClones .. " parts"
+                statusActive = true
+
+                UpdateButton:FireServer(clonedButton, linkedClones)
             end
 
             statusBase = "Status: Moving Parts"
@@ -1207,7 +1239,6 @@ submitButton.MouseButton1Click:Connect(function()
                             ETAText.Text = ""
                             return
                         end
-                        task.wait(1)
                         MoveObject = game:GetService("ReplicatedStorage").Events.MoveObject:InvokeServer(batch)
                     end
                     completedRemoteCalls = completedRemoteCalls + 1
@@ -1228,7 +1259,6 @@ submitButton.MouseButton1Click:Connect(function()
                             local result = DeleteRemote:InvokeServer(dBatch)
 
                             while result ~= true do
-                                task.wait(1)
                                 result = DeleteRemote:InvokeServer(dBatch)
                             end
 
