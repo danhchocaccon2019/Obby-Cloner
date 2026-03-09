@@ -13,8 +13,9 @@ print("Thanks Skelly Friend, BLOCKE, gord for inspiring me :> Also thanks sno3ik
 print("Remember to get 100M Cash before Cloning.")
 
 local ValidBehaviours = nil
+local EffectModule = nil
 pcall(function()
-    local EffectModule = require(game:GetService("ReplicatedStorage").EffectModule)
+    EffectModule = require(game:GetService("ReplicatedStorage").EffectModule)
     ValidBehaviours = EffectModule.GetValues()
 end)
 
@@ -30,6 +31,7 @@ local function getModelDefaults(partName)
     return nil
 end
 
+-- [[ GUI SETUP ]]
 local ui = Instance.new("ScreenGui")
 ui.Parent = game.Players.LocalPlayer.PlayerGui
 ui.ResetOnSpawn = false
@@ -105,8 +107,9 @@ submitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 submitButton.BackgroundColor3 = Color3.fromRGB(0, 128, 255)
 submitButton.BorderSizePixel = 1
 
+-- [[ DRAG LOGIC ]]
 local dragging = false
-local dragStart, startPos
+local dragStart, startPos, dragInput
 
 header.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -139,6 +142,7 @@ game:GetService("UserInputService").InputChanged:Connect(function(input)
     end
 end)
 
+-- [[ RESIZE LOGIC ]]
 local resizeHandle = Instance.new("Frame")
 resizeHandle.Parent = mainFrame
 resizeHandle.Size = UDim2.new(0, 10, 0, 10)
@@ -172,6 +176,7 @@ game:GetService("UserInputService").InputChanged:Connect(function(input)
     end
 end)
 
+-- [[ INFO BAR LABELS ]]
 local Input = textBox
 local SelectText = Instance.new("TextLabel")
 SelectText.Parent = infoBar
@@ -221,6 +226,7 @@ local statusActive = false
 local totalRemoteCalls = 0
 local completedRemoteCalls = 0
 
+-- [[ STATUS DOT ANIMATION ]]
 task.spawn(function()
     local dotStates = {".  ", ".. ", "..."}
     local index = 1
@@ -236,12 +242,13 @@ task.spawn(function()
                 ETAText.Text = ""
             end
         else
-        ETAText.Text = ""
-    end
+            ETAText.Text = ""
+        end
         task.wait(0.5)
     end
 end)
 
+-- [[ HIGHLIGHT LOGIC ]]
 local selectionBox
 
 local function clearHighlight()
@@ -268,6 +275,7 @@ local function highlightArea(areaPart)
     selectionBox.Parent = areaPart
 end
 
+-- [[ PLAYER SEARCH & SELECTION ]]
 Input:GetPropertyChangedSignal("Text"):Connect(function()
     local Text = Input.Text
     T = nil
@@ -310,6 +318,7 @@ end)
 
 local cancelCopying = false
 
+-- [[ CANCEL BUTTON ]]
 local cancelButton = Instance.new("TextButton")
 cancelButton.Parent = mainFrame
 cancelButton.Size = submitButton.Size
@@ -332,6 +341,18 @@ cancelButton.MouseButton1Click:Connect(function()
     submitButton.Visible = true
 end)
 
+-- [[ RESET HELPER ]]
+local function resetIdle()
+    cancelButton.Visible = false
+    submitButton.Visible = true
+    StatusText.Text = "Status: Idle   "
+    statusActive = false
+    ETAText.Text = ""
+    totalRemoteCalls = 0
+    completedRemoteCalls = 0
+end
+
+-- [[ MAIN COPY LOGIC ]]
 submitButton.MouseButton1Click:Connect(function()
     completedRemoteCalls = 0
     totalRemoteCalls = 0
@@ -342,35 +363,34 @@ submitButton.MouseButton1Click:Connect(function()
     statusActive = true
 
     if T then
+        -- [[ CLEAR OBBY ]]
         repeat
             if cancelCopying then
-                StatusText.Text = "Status: Idle   "
-                statusActive = false
-                ETAText.Text = ""
+                resetIdle()
                 return
             end
             statusBase = "Status: Clearing Obby"
             statusActive = true
             stop = game:GetService("ReplicatedStorage").Events.ClearObby:InvokeServer()
+            if game.Players.LocalPlayer.PlayerGui.GetMeObby:Invoke().Name ~= game.Players.LocalPlayer.Name then
+                return
+            end
         until stop == true
 
-        local myArea = workspace.Obbies[game.Players.LocalPlayer.Name].Area.Area
+        local currentObby = game.Players.LocalPlayer.PlayerGui.GetMeObby:Invoke().Name
+        local myArea = workspace.Obbies[currentObby].Area.Area
         local playerObby = sourceFolder
-        local localPlayerObby = workspace:WaitForChild("Obbies"):WaitForChild(game.Players.LocalPlayer.Name)
+        local localPlayerObby = workspace:WaitForChild("Obbies"):WaitForChild(currentObby)
         local tGateCF = playerObby.GetObby.Gate.CFrame
         local myGateCF = localPlayerObby.GetObby.Gate.CFrame
 
+        -- [[ SAVED DATA TABLES ]]
         local savedTransforms = {}
         local savedProperties = {}
         local savedBehaviours = {}
         local savedButtonLinks = {}
 
-        local function updateETA()
-            local remaining = totalRemoteCalls - completedRemoteCalls
-            StatusText.Text = statusBase .. " | ETA: " .. remaining .. "s"
-        end
-
-        local hasAdvancedTools = workspace.Gamepasses.AdvancedTools:FindFirstChild(game.Players.LocalPlayer.Name) ~= nil
+        local hasAdvancedTools = workspace.Gamepasses.AdvancedTools:FindFirstChild(currentObby) ~= nil and workspace.Gamepasses.AdvancedTools:FindFirstChild(game.Players.LocalPlayer.Name) ~= nil
 
         local advancedToolsParts = {
             ["Advanced Tools Part"] = true,
@@ -383,11 +403,11 @@ submitButton.MouseButton1Click:Connect(function()
         end
 
         local function isValidBehaviour(name)
-            return ValidBehaviours[name] ~= nil
+            return ValidBehaviours == nil or ValidBehaviours[name] ~= nil
         end
 
+        -- [[ COLLECT SOURCE PARTS ]]
         if playerObby and playerObby.Items and playerObby.Items.Parts and localPlayerObby then
-            local gatePosition = localPlayerObby.GetObby.Gate.Position
             local obbyParts = {}
             for _, folder in ipairs(playerObby.Items:GetChildren()) do
                 if folder:IsA("Folder") then
@@ -406,8 +426,7 @@ submitButton.MouseButton1Click:Connect(function()
                     end
                 end
             end
-            local addedParts = {}
-            local uniqueParts = {}
+
             local partCounts = {}
         
             for _, part in ipairs(obbyParts) do
@@ -428,6 +447,8 @@ submitButton.MouseButton1Click:Connect(function()
                 local partCFrame = part.CFrame
                 if part.Name:lower():find("push") then
                     partCFrame = part.OrigCFrame.Value
+                elseif part.Name:lower():find("spin") then
+                    partCFrame = CFrame.new(part.CFrame.Position) * part.OrigRotation.Value.Rotation
                 end
 
                 table.insert(savedTransforms[part.Name], {
@@ -452,15 +473,113 @@ submitButton.MouseButton1Click:Connect(function()
                 })
 
                 local instanceBehaviours = {}
+
+                -- resolve gating value for special parts
+                local gearProps = nil
+                local advProps = nil
+                local gblProps = nil
+
+                if part.Name == "Gear Part" then
+                    local gnChild = part:FindFirstChild("Gn")
+                    if gnChild then
+                        gearProps = EffectModule.GetGearProperties()[gnChild.Value]
+                    end
+                elseif part.Name == "Advanced Tools Part" then
+                    local attChild = part:FindFirstChild("ATT")
+                    if attChild then
+                        advProps = EffectModule.GetAdvancedToolsProperties()[attChild.Value]
+                    end
+                elseif part.Name == "Global Properties Part" then
+                    local gptChild = part:FindFirstChild("GPT")
+                    if gptChild then
+                        local cat, key = gptChild.Value:match("^(.-)%-(.+)$")
+                        if cat and key then
+                            local defaults = EffectModule.GetGlobalDefaults()
+                            if defaults[cat] and defaults[cat][key] ~= nil then
+                                local val = defaults[cat][key]
+                                -- determine type from value
+                                local t = type(val)
+                                if t == "boolean" then
+                                    gblProps = "BoolValue"
+                                elseif t == "number" then
+                                    gblProps = "NumberValue"
+                                elseif t == "table" then
+                                    gblProps = "Color3Value" -- tables in defaults are Color3 arrays
+                                end
+                            end
+                        end
+                    end
+                end
+
                 for _, child in ipairs(part:GetChildren()) do
                     if child:IsA("BoolValue") or child:IsA("Color3Value") or child:IsA("NumberValue") or child:IsA("StringValue") or child:IsA("Vector3Value") then
-                        if child.Name:lower() ~= "active" and child.Name:lower() ~= "m1" and child.Name:lower() ~= "m2" and (ValidBehaviours == nil or isValidBehaviour(child.Name)) then
-                            table.insert(instanceBehaviours, {
-                                valueName = child.Name,
-                                value = child.Value,
-                                valueType = child.ClassName
-                            })
+                        local cname = child.Name:lower()
+                        if cname == "active" or cname == "m1" or cname == "m2" then continue end
+                        if not (ValidBehaviours == nil or isValidBehaviour(child.Name)) then continue end
+
+                        -- for special parts, filter Default* children by what the gating value allows
+                        if part.Name == "Gear Part" and child.Name:sub(1, 7) == "Default" then
+                            if not gearProps then continue end
+                            -- map className to what gear props uses
+                            local typeMap = {
+                                BoolValue = "BoolValue",
+                                NumberValue = "NumberValue",
+                                Color3Value = "Color3Value"
+                            }
+                            -- check if any key in gearProps matches this value type
+                            local allowed = false
+                            for propName, propDef in pairs(gearProps) do
+                                if type(propDef) == "boolean" and child.ClassName == "BoolValue" then
+                                    allowed = true break
+                                elseif type(propDef) == "table" and propDef[1] == nil then
+                                    -- color range table
+                                    if child.ClassName == "Color3Value" then allowed = true break end
+                                elseif type(propDef) == "table" then
+                                    if child.ClassName == "NumberValue" then allowed = true break end
+                                end
+                            end
+                            if not allowed then continue end
+
+                        elseif part.Name == "Advanced Tools Part" and child.Name:sub(1, 7) == "Default" then
+                            if not advProps then continue end
+                            local expectedClass = advProps[1]
+                            if child.ClassName ~= expectedClass then continue end
+
+                        elseif part.Name == "Global Properties Part" and child.Name:sub(1, 7) == "Default" then
+                            if not gblProps then continue end
+                            if child.ClassName ~= gblProps then continue end
                         end
+
+                        local extraArg = nil
+                        if part.Name == "Gear Part" and child.Name:sub(1, 7) == "Default" and gearProps then
+                            local classToType = {
+                                BoolValue    = "boolean",
+                                NumberValue  = "number",
+                                Color3Value  = "color",
+                            }
+                            local childType = classToType[child.ClassName]
+                            for propName, propDef in pairs(gearProps) do
+                                local matches = false
+                                if childType == "boolean" and type(propDef) == "boolean" then
+                                    matches = true
+                                elseif childType == "color" and type(propDef) == "table" and propDef[1] == nil then
+                                    matches = true
+                                elseif childType == "number" and type(propDef) == "table" and propDef[1] ~= nil then
+                                    matches = true
+                                end
+                                if matches then
+                                    extraArg = propName
+                                    break
+                                end
+                            end
+                        end
+
+                        table.insert(instanceBehaviours, {
+                            valueName = child.Name,
+                            value = child.Value,
+                            valueType = child.ClassName,
+                            extraArg = extraArg
+                        })
                     end
                 end
                 table.insert(savedBehaviours[part.Name], instanceBehaviours)
@@ -479,13 +598,10 @@ submitButton.MouseButton1Click:Connect(function()
 
                 if part:IsA("BasePart") then
                     partCounts[part.Name] = (partCounts[part.Name] or 0) + 1
-                    if not addedParts[part.Name] then
-                        addedParts[part.Name] = true
-                        table.insert(uniqueParts, part.Name)
-                    end
                 end
             end
 
+            -- [[ SORT PARTS ]]
             local sortedParts = {}
             for name, count in pairs(partCounts) do
                 table.insert(sortedParts, {
@@ -598,15 +714,14 @@ submitButton.MouseButton1Click:Connect(function()
             print("=== End Debug ===")
             -- Debug: print all unique properties and behaviours
 
+            -- [[ ADD OBJECT ]]
             statusBase = "Status: Placing Base Parts"
             statusActive = true
             for _, entry in ipairs(sortedParts) do
                 local partName = entry.name
                 if isAdvancedPart(partName) then continue end
                 if cancelCopying then
-                    StatusText.Text = "Status: Idle   "
-                    statusActive = false
-                    ETAText.Text = ""
+                    resetIdle()
                     return
                 end
                 statusBase = "Placing: " .. partName
@@ -624,9 +739,7 @@ submitButton.MouseButton1Click:Connect(function()
                 local partMade = game:GetService("ReplicatedStorage").Events.AddObject:InvokeServer(unpack(args))
                 while partMade ~= true do
                     if cancelCopying then
-                        StatusText.Text = "Status: Idle   "
-                        statusActive = false
-                        ETAText.Text = ""
+                        resetIdle()
                         return
                     end
                     partMade = game:GetService("ReplicatedStorage").Events.AddObject:InvokeServer(unpack(args))
@@ -634,6 +747,7 @@ submitButton.MouseButton1Click:Connect(function()
                 completedRemoteCalls = completedRemoteCalls + 1
             end
 
+            -- [[ CLONE OBJECT ]]
             statusBase = "Status: Cloning Parts"
             statusActive = true
             local MAX_BATCH = 1000
@@ -642,9 +756,7 @@ submitButton.MouseButton1Click:Connect(function()
                 local count = entry.count
                 if isAdvancedPart(name) then continue end
                 if cancelCopying then
-                    StatusText.Text = "Status: Idle   "
-                    statusActive = false
-                    ETAText.Text = ""
+                    resetIdle()
                     return
                 end
 
@@ -676,9 +788,7 @@ submitButton.MouseButton1Click:Connect(function()
                 statusActive = true
                 while left > 0 do
                     if cancelCopying then
-                        StatusText.Text = "Status: Idle   "
-                        statusActive = false
-                        ETAText.Text = ""
+                        resetIdle()
                         return
                     end
                     statusBase = "Cloning: " .. name .. " | Remaining: " .. left
@@ -723,9 +833,7 @@ submitButton.MouseButton1Click:Connect(function()
                     local cloneMade = game:GetService("ReplicatedStorage").Events.CloneObject:InvokeServer(unpack(args))
                     while cloneMade ~= true do
                         if cancelCopying then
-                            StatusText.Text = "Status: Idle   "
-                            statusActive = false
-                            ETAText.Text = ""
+                            resetIdle()
                             return
                         end
                         cloneMade = game:GetService("ReplicatedStorage").Events.CloneObject:InvokeServer(unpack(args))
@@ -736,6 +844,7 @@ submitButton.MouseButton1Click:Connect(function()
                 end
             end
 
+            -- [[ INSIDE AREA CHECK ]]
             local function isInsideArea(cf, size, area)
                 local half = size / 2
 
@@ -767,6 +876,37 @@ submitButton.MouseButton1Click:Connect(function()
                 return true
             end
 
+            -- [[ ORIGINAL -> CLONE MAP ]]
+            local originalToClone = {}
+            do
+                local cloneIndexByName = {}
+                for _, folder in ipairs(localPlayerObby.Items:GetChildren()) do
+                    if folder:IsA("Folder") then
+                        for _, inst in ipairs(folder:GetChildren()) do
+                            local resolvedInst = inst
+                            if inst:IsA("Model") then
+                                resolvedInst = inst:FindFirstChild(inst.Name)
+                            end
+                            if resolvedInst then
+                                local name = resolvedInst.Name
+                                cloneIndexByName[name] = cloneIndexByName[name] or {}
+                                table.insert(cloneIndexByName[name], resolvedInst)
+                            end
+                        end
+                    end
+                end
+
+                for partName, list in pairs(savedTransforms) do
+                    local cloneList = cloneIndexByName[partName] or {}
+                    for i, transformData in ipairs(list) do
+                        if cloneList[i] and transformData.originalInst then
+                            originalToClone[transformData.originalInst] = cloneList[i]
+                        end
+                    end
+                end
+            end
+
+            -- [[ ALL MOVES TABLE ]]
             statusBase = "Status: Preparing Move"
             statusActive = true
             local allMoves = {}
@@ -834,6 +974,7 @@ submitButton.MouseButton1Click:Connect(function()
                 return a.name < b.name
             end)
 
+            -- [[ PAINT OBJECT ]]
             statusBase = "Status: Syncing Properties"
             statusActive = true
 
@@ -930,9 +1071,7 @@ submitButton.MouseButton1Click:Connect(function()
                     local i = 1
                     while i <= total do
                         if cancelCopying then
-                            StatusText.Text = "Status: Idle   "
-                            statusActive = false
-                            ETAText.Text = ""
+                            resetIdle()
                             return
                         end
 
@@ -972,9 +1111,7 @@ submitButton.MouseButton1Click:Connect(function()
 
                         while result ~= true do
                             if cancelCopying then
-                                StatusText.Text = "Status: Idle   "
-                                statusActive = false
-                                ETAText.Text = ""
+                                resetIdle()
                                 return
                             end
                             result = PaintRemote:InvokeServer(batch, property, sendValue)
@@ -987,6 +1124,7 @@ submitButton.MouseButton1Click:Connect(function()
                 end
             end
 
+            -- [[ BEHAVIOUR OBJECT ]]
             local behaviourBatches = {}
 
             for _, group in pairs(allMoves) do
@@ -1017,6 +1155,7 @@ submitButton.MouseButton1Click:Connect(function()
                                     valueName = entry.valueName,
                                     value = value,
                                     valueType = valueType,
+                                    extraArg = entry.extraArg,
                                     parts = {}
                                 }
                             end
@@ -1041,7 +1180,14 @@ submitButton.MouseButton1Click:Connect(function()
                 valueNameTotals[vName] = (valueNameTotals[vName] or 0) + entry.count
             end
 
+            local gatingNames = { ["Gn"] = true, ["ATT"] = true, ["GPT"] = true }
+
             table.sort(sortedBehaviours, function(a, b)
+                local aIsGate = gatingNames[a.data.valueName] and true or false
+                local bIsGate = gatingNames[b.data.valueName] and true or false
+                if aIsGate ~= bIsGate then
+                    return aIsGate
+                end
                 if a.data.valueName ~= b.data.valueName then
                     return a.data.valueName < b.data.valueName
                 end
@@ -1067,9 +1213,7 @@ submitButton.MouseButton1Click:Connect(function()
 
                 while i <= total do
                     if cancelCopying then
-                        StatusText.Text = "Status: Idle   "
-                        statusActive = false
-                        ETAText.Text = ""
+                        resetIdle()
                         return
                     end
 
@@ -1090,15 +1234,18 @@ submitButton.MouseButton1Click:Connect(function()
                     statusBase = "Behaviours: " .. valueName .. " = " .. tostring(sendValue) .. " | " .. i .. "/" .. total
                     statusActive = true
 
-                    local result = BehaviourRemote:InvokeServer(batch, valueName, sendValue)
+                    local extraArg = entry.data.extraArg
+                    local result = extraArg
+                        and BehaviourRemote:InvokeServer(batch, valueName, sendValue, extraArg)
+                        or  BehaviourRemote:InvokeServer(batch, valueName, sendValue)
                     while result ~= true do
                         if cancelCopying then
-                            StatusText.Text = "Status: Idle   "
-                            statusActive = false
-                            ETAText.Text = ""
+                            resetIdle()
                             return
                         end
-                        result = BehaviourRemote:InvokeServer(batch, valueName, sendValue)
+                        result = extraArg
+                            and BehaviourRemote:InvokeServer(batch, valueName, sendValue, extraArg)
+                            or  BehaviourRemote:InvokeServer(batch, valueName, sendValue)
                     end
                     completedRemoteCalls = completedRemoteCalls + 1
 
@@ -1106,15 +1253,7 @@ submitButton.MouseButton1Click:Connect(function()
                 end
             end
 
-            local originalToClone = {}
-            for _, group in pairs(allMoves) do
-                for _, moveData in ipairs(group) do
-                    if moveData.originalInst then
-                        originalToClone[moveData.originalInst] = moveData.clone
-                    end
-                end
-            end
-
+            -- [[ UPDATE BUTTON ]]
             statusBase = "Status: Syncing Button Links"
             statusActive = true
 
@@ -1122,9 +1261,7 @@ submitButton.MouseButton1Click:Connect(function()
 
             for originalButton, linkedOriginals in pairs(savedButtonLinks) do
                 if cancelCopying then
-                    StatusText.Text = "Status: Idle   "
-                    statusActive = false
-                    ETAText.Text = ""
+                    resetIdle()
                     return
                 end
 
@@ -1147,6 +1284,7 @@ submitButton.MouseButton1Click:Connect(function()
                 UpdateButton:FireServer(clonedButton, linkedClones)
             end
 
+            -- [[ MOVE OBJECT ]]
             statusBase = "Status: Moving Parts"
             statusActive = true
             local MAX_BATCH = 1000
@@ -1159,9 +1297,7 @@ submitButton.MouseButton1Click:Connect(function()
 
                 while i <= #group do
                     if cancelCopying then
-                        StatusText.Text = "Status: Idle   "
-                        statusActive = false
-                        ETAText.Text = ""
+                        resetIdle()
                         return
                     end
 
@@ -1234,9 +1370,7 @@ submitButton.MouseButton1Click:Connect(function()
                     local MoveObject = game:GetService("ReplicatedStorage").Events.MoveObject:InvokeServer(batch)
                     while MoveObject ~= true do
                         if cancelCopying then
-                            StatusText.Text = "Status: Idle   "
-                            statusActive = false
-                            ETAText.Text = ""
+                            resetIdle()
                             return
                         end
                         MoveObject = game:GetService("ReplicatedStorage").Events.MoveObject:InvokeServer(batch)
@@ -1269,9 +1403,5 @@ submitButton.MouseButton1Click:Connect(function()
             end
         end
     end
-    cancelButton.Visible = false
-    submitButton.Visible = true
-    StatusText.Text = "Status: Idle   "
-    statusActive = false
-    ETAText.Text = ""
+    resetIdle()
 end)
