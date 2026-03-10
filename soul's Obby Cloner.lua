@@ -12,11 +12,9 @@ warn("-+-------=-s͘c͘r͘i͘p͘t͘-b͘e͘g͘i͘n͘-=-------+-")
 print("Thanks Skelly Friend, BLOCKE, gord for inspiring me :> Also thanks sno3iku for supporting me through out the journey :3")
 print("Remember to get 100M Cash before Cloning.")
 
-local ValidBehaviours = nil
 local EffectModule = nil
 pcall(function()
     EffectModule = require(game:GetService("ReplicatedStorage").EffectModule)
-    ValidBehaviours = EffectModule.GetValues()
 end)
 
 local GetModelProps = nil
@@ -402,10 +400,6 @@ submitButton.MouseButton1Click:Connect(function()
             return advancedToolsParts[name] and not hasAdvancedTools
         end
 
-        local function isValidBehaviour(name)
-            return ValidBehaviours == nil or ValidBehaviours[name] ~= nil
-        end
-
         -- [[ COLLECT SOURCE PARTS ]]
         if playerObby and playerObby.Items and playerObby.Items.Parts and localPlayerObby then
             local obbyParts = {}
@@ -479,32 +473,36 @@ submitButton.MouseButton1Click:Connect(function()
                 local advProps = nil
                 local gblProps = nil
 
-                if part.Name == "Gear Part" then
+                if part.Name == "Gear Part" and EffectModule then
                     local gnChild = part:FindFirstChild("Gn")
                     if gnChild then
-                        gearProps = EffectModule.GetGearProperties()[gnChild.Value]
+                        local gearTable = EffectModule.GetGearProperties()
+                        if gearTable then
+                            gearProps = gearTable[gnChild.Value]
+                        end
                     end
-                elseif part.Name == "Advanced Tools Part" then
+                elseif part.Name == "Advanced Tools Part" and EffectModule then
                     local attChild = part:FindFirstChild("ATT")
                     if attChild then
-                        advProps = EffectModule.GetAdvancedToolsProperties()[attChild.Value]
+                        local advTable = EffectModule.GetAdvancedToolsProperties()
+                        if advTable then
+                            advProps = advTable[attChild.Value]
+                        end
                     end
-                elseif part.Name == "Global Properties Part" then
+                elseif part.Name == "Global Properties Part" and EffectModule then
                     local gptChild = part:FindFirstChild("GPT")
                     if gptChild then
                         local cat, key = gptChild.Value:match("^(.-)%-(.+)$")
                         if cat and key then
                             local defaults = EffectModule.GetGlobalDefaults()
-                            if defaults[cat] and defaults[cat][key] ~= nil then
+                            if defaults and defaults[cat] and defaults[cat][key] ~= nil then
                                 local val = defaults[cat][key]
-                                -- determine type from value
-                                local t = type(val)
-                                if t == "boolean" then
+                                if type(val) == "boolean" then
                                     gblProps = "BoolValue"
-                                elseif t == "number" then
+                                elseif type(val) == "number" then
                                     gblProps = "NumberValue"
-                                elseif t == "table" then
-                                    gblProps = "Color3Value" -- tables in defaults are Color3 arrays
+                                elseif type(val) == "table" then
+                                    gblProps = "Color3Value"
                                 end
                             end
                         end
@@ -515,7 +513,6 @@ submitButton.MouseButton1Click:Connect(function()
                     if child:IsA("BoolValue") or child:IsA("Color3Value") or child:IsA("NumberValue") or child:IsA("StringValue") or child:IsA("Vector3Value") then
                         local cname = child.Name:lower()
                         if cname == "active" or cname == "m1" or cname == "m2" then continue end
-                        if not (ValidBehaviours == nil or isValidBehaviour(child.Name)) then continue end
 
                         -- for special parts, filter Default* children by what the gating value allows
                         if part.Name == "Gear Part" and child.Name:sub(1, 7) == "Default" then
