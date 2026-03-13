@@ -233,8 +233,8 @@ task.spawn(function()
         if statusActive then
             index = index % 3 + 1
             StatusText.Text = statusBase .. dotStates[index]
-            local remaining = math.max(0, totalRemoteCalls - completedRemoteCalls)
             if totalRemoteCalls > 0 then
+                local remaining = math.max(0, totalRemoteCalls - completedRemoteCalls)
                 ETAText.Text = "Estimate: " .. remaining .. "s"
             else
                 ETAText.Text = ""
@@ -438,21 +438,30 @@ submitButton.MouseButton1Click:Connect(function()
                     }
                 end
 
+                -- remap legacy "spinning" parts → treat as "Spin Part"
+                local isSpinningPart = part.Name:lower():find("spinning") ~= nil
+
                 local partCFrame = part.CFrame
                 if part.Name:lower():find("push") then
                     partCFrame = part.OrigCFrame.Value
                 elseif part.Name:lower():find("spin") then
-                    partCFrame = CFrame.new(part.CFrame.Position) * part.OrigRotation.Value.Rotation
+                    partCFrame = CFrame.new(part.CFrame.Position) * (part:FindFirstChild("OrigRotation") and part.OrigRotation.Value.Rotation or CFrame.identity.Rotation)
                 end
 
-                table.insert(savedTransforms[part.Name], {
+                local recordedName = isSpinningPart and "Spin Part" or part.Name
+                savedTransforms[recordedName] = savedTransforms[recordedName] or {}
+                savedProperties[recordedName] = savedProperties[recordedName] or {}
+                savedBehaviours[recordedName] = savedBehaviours[recordedName] or {}
+                savedButtonLinks[recordedName] = savedButtonLinks[recordedName] or {}
+
+                table.insert(savedTransforms[recordedName], {
                     relative = tGateCF:Inverse() * partCFrame,
                     size = part.Size,
                     movement = movementData,
                     originalInst = part
                 })
 
-                table.insert(savedProperties[part.Name], {
+                table.insert(savedProperties[recordedName], {
                     Color = part.Color,
                     Material = part.Material,
                     CanCollide = part.CanCollide,
@@ -483,7 +492,7 @@ submitButton.MouseButton1Click:Connect(function()
                     end
                 elseif part.Name == "Advanced Tools Part" and EffectModule then
                     local attChild = part:FindFirstChild("ATT")
-                    if attChild then
+                    if attChild and attChild.Value ~= "ColorEffect" then
                         local advTable = EffectModule.GetAdvancedToolsProperties()
                         if advTable then
                             advProps = advTable[attChild.Value]
@@ -579,7 +588,8 @@ submitButton.MouseButton1Click:Connect(function()
                         })
                     end
                 end
-                table.insert(savedBehaviours[part.Name], instanceBehaviours)
+                -- spinning parts: skip all behaviours (they break remotes)
+                table.insert(savedBehaviours[recordedName], isSpinningPart and {} or instanceBehaviours)
 
                 local actualInst = part.Parent:IsA("Model") and part.Parent or part
                 local buttonsFolder = actualInst:FindFirstChild("Buttons")
@@ -594,7 +604,7 @@ submitButton.MouseButton1Click:Connect(function()
                 end
 
                 if part:IsA("BasePart") then
-                    partCounts[part.Name] = (partCounts[part.Name] or 0) + 1
+                    partCounts[recordedName] = (partCounts[recordedName] or 0) + 1
                 end
             end
 
@@ -684,25 +694,6 @@ submitButton.MouseButton1Click:Connect(function()
 
             print("=== Total Property Batches: " .. totalPropBatches .. " ===")
             print("=== Total Behaviour Batches: " .. totalBehavBatches .. " ===")
-
-            -- estimate total remote calls
-            local MAX_BATCH = 1000
-            local estimatedCalls = 0
-            for _, entry in ipairs(sortedParts) do
-                estimatedCalls = estimatedCalls + 1 -- AddObject
-                estimatedCalls = estimatedCalls + math.ceil(entry.count / MAX_BATCH) -- CloneObject
-            end
-            estimatedCalls = estimatedCalls + 1 -- DeleteObject pass
-            -- MoveObject batches
-            for _, entry in ipairs(sortedParts) do
-                estimatedCalls = estimatedCalls + math.ceil(entry.count / MAX_BATCH)
-            end
-            -- Property batches
-            estimatedCalls = estimatedCalls + totalPropBatches
-            -- Behaviour batches
-            estimatedCalls = estimatedCalls + totalBehavBatches
-            totalRemoteCalls = estimatedCalls
-            print("=== Estimated Remote Calls: " .. estimatedCalls .. " ===")
 
             for _, entry in ipairs(sortedParts) do
                 print(entry.name .. ": " .. entry.count)
@@ -918,7 +909,10 @@ submitButton.MouseButton1Click:Connect(function()
                         for _, inst in ipairs(folder:GetChildren()) do
                             local resolvedInst = inst
                             if inst:IsA("Model") then
-                                resolvedInst = inst:FindFirstChild(inst.Name)
+                                local part = inst:FindFirstChild(inst.Name)
+                                if part and part:IsA("BasePart") then
+                                    resolvedInst = part
+                                end
                             end
                             if resolvedInst and resolvedInst.Name == partName and list[index] then
                                 local transformData = savedTransforms[partName][index]
@@ -971,6 +965,282 @@ submitButton.MouseButton1Click:Connect(function()
                 return a.name < b.name
             end)
 
+            -- [[ PRE-COLLECT EFFECTS ]]
+            statusBase = "Status: Analysing Effects"
+            statusActive = true
+
+            local effectBatches = {}
+            local effectMap = EffectModule and EffectModule.InstanceToEffect() or {}
+            local guiObjects = EffectModule and EffectModule.GetGuiObjects() or {
+                ["TextLabel"] = true, ["ImageLabel"] = true, ["VideoFrame"] = true
+            }
+            local defaults = EffectModule and EffectModule.GetDefaultEffects() or {}
+
+            -- properties stored per instance
+            local effectProps = {}
+
+            for _, part in ipairs(obbyParts) do
+                if part.Parent:IsA("Model") then continue end
+
+                local clonePart = originalToClone[part]
+                if not clonePart then continue end
+
+                for _, child in ipairs(part:GetChildren()) do
+                    -- GUI container (SurfaceGui / BillboardGui):
+                    -- Face lives on the container, the actual effect type
+                    -- is determined by its GuiObject child
+                    if child:IsA("SurfaceGui") or child:IsA("BillboardGui") then
+                        local guiChild = child:FindFirstChildWhichIsA("GuiObject")
+                        if not guiChild then continue end
+
+                        local effectType = effectMap[guiChild.ClassName]
+                        if not effectType then continue end
+
+                        -- Add the effect itself
+                        local key = effectType .. "|Default"
+                        if not effectBatches[key] then
+                            effectBatches[key] = {
+                                effectType = effectType,
+                                preset = "Default",
+                                extraVal = nil,
+                                parts = {}
+                            }
+                        end
+                        table.insert(effectBatches[key].parts, clonePart)
+
+                        -- Face is on the container, not the gui child
+                        local effectPropList = effectProps[guiChild] or {}
+                        local defaultFace = "Front"
+                        local faceStr = tostring(child.Face):match("%.([^%.]+)$") or tostring(child.Face)
+                        if faceStr ~= defaultFace then
+                            table.insert(effectPropList, {
+                                instance = guiChild,
+                                effectType = effectType,
+                                propName = "Face",
+                                value = faceStr
+                            })
+                        end
+
+                        -- Non-default properties live on the GuiObject child
+                        local effectDefaults = defaults[effectType] or {}
+                        for propName, defaultVal in pairs(effectDefaults) do
+                            if propName == "Face" then continue end
+                            local ok, actualVal = pcall(function() return guiChild[propName] end)
+                            if not ok then continue end
+
+                            local differs = false
+                            if type(defaultVal) == "number" then
+                                differs = actualVal ~= defaultVal
+                            elseif type(defaultVal) == "boolean" then
+                                differs = actualVal ~= defaultVal
+                            elseif typeof(defaultVal) == "Color3" then
+                                differs = actualVal ~= defaultVal
+                            else
+                                differs = tostring(actualVal) ~= tostring(defaultVal)
+                            end
+
+                            if differs then
+                                local sendVal = actualVal
+                                if typeof(actualVal) == "Color3" then
+                                    -- keep as Color3, remote expects it natively
+                                elseif typeof(actualVal) == "ColorSequence" then
+                                    -- keep as ColorSequence, remote expects it natively
+                                elseif typeof(actualVal) == "NumberSequence" then
+                                    -- keep as NumberSequence, remote expects it natively
+                                elseif typeof(actualVal) == "NumberRange" then
+                                    -- keep as NumberRange, remote expects it natively
+                                elseif typeof(actualVal) == "Vector2" then
+                                    -- keep as Vector2, remote expects it natively
+                                elseif type(actualVal) == "userdata" then
+                                    local s = tostring(actualVal)
+                                    sendVal = s:match("%.([^%.]+)$") or s
+                                end
+                                table.insert(effectPropList, {
+                                    instance = guiChild,
+                                    effectType = effectType,
+                                    propName = propName,
+                                    value = sendVal
+                                })
+                            end
+                        end
+
+                        if #effectPropList > 0 then
+                            effectProps[guiChild] = effectPropList
+                        end
+
+                    else
+                        -- Regular effect (Fire, Smoke, PointLight, Texture, ProximityPrompt, etc.)
+                        local effectType = effectMap[child.ClassName]
+                        if not effectType then continue end
+
+                        local key = effectType .. "|Default"
+                        if not effectBatches[key] then
+                            effectBatches[key] = {
+                                effectType = effectType,
+                                preset = "Default",
+                                extraVal = nil,
+                                parts = {}
+                            }
+                        end
+                        table.insert(effectBatches[key].parts, clonePart)
+
+                        local effectDefaults = defaults[effectType] or {}
+                        local effectPropList = effectProps[child] or {}
+
+                        for propName, defaultVal in pairs(effectDefaults) do
+                            local ok, actualVal = pcall(function() return child[propName] end)
+                            if not ok then continue end
+
+                            local differs = false
+                            if type(defaultVal) == "number" then
+                                differs = actualVal ~= defaultVal
+                            elseif type(defaultVal) == "boolean" then
+                                differs = actualVal ~= defaultVal
+                            elseif typeof(defaultVal) == "Color3" then
+                                differs = actualVal ~= defaultVal
+                            else
+                                differs = tostring(actualVal) ~= tostring(defaultVal)
+                            end
+
+                            if differs then
+                                local sendVal = actualVal
+                                if typeof(actualVal) == "Color3" then
+                                    -- keep as Color3, remote expects it natively
+                                elseif typeof(actualVal) == "ColorSequence" then
+                                    -- keep as ColorSequence, remote expects it natively
+                                elseif typeof(actualVal) == "NumberSequence" then
+                                    -- keep as NumberSequence, remote expects it natively
+                                elseif typeof(actualVal) == "NumberRange" then
+                                    -- keep as NumberRange, remote expects it natively
+                                elseif typeof(actualVal) == "Vector2" then
+                                    -- keep as Vector2, remote expects it natively
+                                elseif type(actualVal) == "userdata" then
+                                    local s = tostring(actualVal)
+                                    sendVal = s:match("%.([^%.]+)$") or s
+                                end
+                                table.insert(effectPropList, {
+                                    instance = child,
+                                    effectType = effectType,
+                                    propName = propName,
+                                    value = sendVal
+                                })
+                            end
+                        end
+
+                        if #effectPropList > 0 then
+                            effectProps[child] = effectPropList
+                        end
+                    end
+                end
+            end
+
+            -- [[ ESTIMATE TOTAL REMOTE CALLS ]]
+            do
+                local est = 0
+
+                -- AddObject
+                for _, entry in ipairs(sortedParts) do
+                    if not isAdvancedPart(entry.name) then
+                        est += 1
+                    end
+                end
+
+                -- CloneObject
+                for _, entry in ipairs(sortedParts) do
+                    if not isAdvancedPart(entry.name) then
+                        est += math.ceil(entry.count / 1000)
+                    end
+                end
+
+                -- PaintObject
+                local paintUniques = {}
+                for _, group in pairs(allMoves) do
+                    for _, data in ipairs(group) do
+                        for property, value in pairs(data.properties) do
+                            if value == nil then continue end
+                            local key
+                            if property == "Color" then
+                                key = property.."|"..string.format("%d_%d_%d", math.floor(value.R*255), math.floor(value.G*255), math.floor(value.B*255))
+                            elseif property == "Material" or property == "Surface" or property == "Shape" or property == "Style" then
+                                key = property.."|"..value.Name
+                            elseif type(value) == "number" and value ~= value then
+                                key = property.."|NaN"
+                            else
+                                key = property.."|"..tostring(value)
+                            end
+                            paintUniques[key] = (paintUniques[key] or 0) + 1
+                        end
+                    end
+                end
+                for _, count in pairs(paintUniques) do
+                    est += math.ceil(count / 1000)
+                end
+
+                -- BehaviourObject
+                local behavUniques = {}
+                for _, group in pairs(allMoves) do
+                    for _, data in ipairs(group) do
+                        for _, entry in ipairs(data.behaviours or {}) do
+                            local keyVal
+                            if entry.valueType == "Color3Value" then
+                                keyVal = string.format("%d_%d_%d", math.floor(entry.value.R*255), math.floor(entry.value.G*255), math.floor(entry.value.B*255))
+                            elseif entry.valueType == "Vector3Value" then
+                                keyVal = string.format("%.3f_%.3f_%.3f", entry.value.X, entry.value.Y, entry.value.Z)
+                            else
+                                keyVal = tostring(entry.value)
+                            end
+                            local key = tostring(entry.valueName).."|"..keyVal
+                            behavUniques[key] = (behavUniques[key] or 0) + 1
+                        end
+                    end
+                end
+                for _, count in pairs(behavUniques) do
+                    est += math.ceil(count / 1000)
+                end
+
+                -- EffectObject
+                for _, data in pairs(effectBatches) do
+                    est += math.ceil(#data.parts / 1000)
+                end
+
+                -- EffectObject props
+                local slowTextFieldsEst = {
+                    ["text"]   = { ["Text"] = true },
+                    ["prompt"] = { ["ObjectText"] = true, ["ActionText"] = true }
+                }
+                local tempPropBatches = {}
+                for instance, propList in pairs(effectProps) do
+                    for _, entry in ipairs(propList) do
+                        local keyVal
+                        if typeof(entry.value) == "Color3" then
+                            keyVal = string.format("%d_%d_%d", math.floor(entry.value.R*255), math.floor(entry.value.G*255), math.floor(entry.value.B*255))
+                        elseif type(entry.value) == "number" and entry.value ~= entry.value then
+                            keyVal = "NaN"
+                        else
+                            keyVal = tostring(entry.value)
+                        end
+                        local key = entry.effectType.."|"..entry.propName.."|"..keyVal
+                        tempPropBatches[key] = tempPropBatches[key] or { count = 0, effectType = entry.effectType, propName = entry.propName }
+                        tempPropBatches[key].count += 1
+                    end
+                end
+                for _, data in pairs(tempPropBatches) do
+                    local fieldMap = slowTextFieldsEst[data.effectType]
+                    local cost = (fieldMap and fieldMap[data.propName]) and 10 or 1
+                    est += math.ceil(data.count / 1000) * cost
+                end
+
+                -- MoveObject
+                for _, entry in ipairs(sortedMoveGroups) do
+                    est += math.ceil(entry.count / 1000)
+                end
+
+                -- DeleteObject
+                est += 1
+
+                totalRemoteCalls = est
+            end
+
             -- [[ PAINT OBJECT ]]
             statusBase = "Status: Syncing Properties"
             statusActive = true
@@ -1014,6 +1284,7 @@ submitButton.MouseButton1Click:Connect(function()
                     local props = data.properties
 
                     for property, value in pairs(props) do
+                        if value == nil then continue end
 
                         local key = value
 
@@ -1025,6 +1296,8 @@ submitButton.MouseButton1Click:Connect(function()
                             )
                         elseif property == "Material" or property == "Surface" or property == "Shape" or property == "Style" then
                             key = value.Name
+                        elseif type(value) == "number" and value ~= value then
+                            key = "NaN"
                         end
 
                         propertyBatches[property][key] =
@@ -1279,6 +1552,211 @@ submitButton.MouseButton1Click:Connect(function()
                 statusActive = true
 
                 UpdateButton:FireServer(clonedButton, linkedClones)
+            end
+
+            -- [[ EFFECT OBJECT ]]
+            statusBase = "Status: Syncing Effects"
+            statusActive = true
+
+            local EffectRemote = game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("EffectObject")
+            local MAX_BATCH = 1000
+
+            local sortedEffects = {}
+
+            for key,data in pairs(effectBatches) do
+                table.insert(sortedEffects,{
+                    key = key,
+                    data = data,
+                    count = #data.parts
+                })
+            end
+
+            table.sort(sortedEffects,function(a,b)
+                if a.count ~= b.count then
+                    return a.count > b.count
+                end
+                return a.key < b.key
+            end)
+
+            for _,entry in ipairs(sortedEffects) do
+                local effectType = entry.data.effectType
+                local preset = entry.data.preset
+                local extraVal = entry.data.extraVal
+                local parts = entry.data.parts
+
+                local total = #parts
+                local i = 1
+
+                while i <= total do
+                    if cancelCopying then resetIdle() return end
+
+                    local batch = {}
+
+                    for j = i,math.min(i + MAX_BATCH - 1,total) do
+                        table.insert(batch,parts[j])
+                    end
+
+                    statusBase = "Effects: "..effectType.." | "..i.."/"..total
+                    statusActive = true
+
+                    local result
+
+                    if extraVal ~= nil then
+                        result = EffectRemote:InvokeServer(batch,effectType,preset,extraVal)
+                    else
+                        result = EffectRemote:InvokeServer(batch,effectType,preset)
+                    end
+
+                    while result ~= true do
+                        if cancelCopying then resetIdle() return end
+
+                        if extraVal ~= nil then
+                            result = EffectRemote:InvokeServer(batch,effectType,preset,extraVal)
+                        else
+                            result = EffectRemote:InvokeServer(batch,effectType,preset)
+                        end
+                    end
+
+                    completedRemoteCalls += 1
+                    i += MAX_BATCH
+                end
+            end
+
+            -- [[ EFFECT PROPERTIES ]]
+            statusBase = "Status: Syncing Effect Properties"
+            statusActive = true
+
+            local effectPropBatches = {}
+
+            for instance,propList in pairs(effectProps) do
+                for _,entry in ipairs(propList) do
+
+                    local keyVal
+
+                    if typeof(entry.value) == "Color3" then
+                        keyVal = string.format("%d_%d_%d",
+                            math.floor(entry.value.R*255),
+                            math.floor(entry.value.G*255),
+                            math.floor(entry.value.B*255)
+                        )
+                    elseif type(entry.value) == "number" and entry.value ~= entry.value then
+                        keyVal = "NaN"
+                    else
+                        keyVal = tostring(entry.value)
+                    end
+
+                    local key = entry.effectType.."|"..entry.propName.."|"..keyVal
+
+                    if not effectPropBatches[key] then
+                        effectPropBatches[key] = {
+                            effectType = entry.effectType,
+                            propName = entry.propName,
+                            value = entry.value,
+                            parts = {}
+                        }
+                    end
+
+                    local root = instance
+                    while root and not originalToClone[root] do
+                        root = root.Parent
+                    end
+
+                    local targetPart = originalToClone[root] or instance
+
+                    table.insert(effectPropBatches[key].parts,targetPart)
+                end
+            end
+
+            local sortedEffectProps = {}
+
+            for key,data in pairs(effectPropBatches) do
+                table.insert(sortedEffectProps,{
+                    key = key,
+                    data = data,
+                    count = #data.parts
+                })
+            end
+
+            local slowTextFields = {
+                ["text"] = { ["Text"] = true },
+                ["prompt"] = { ["ObjectText"] = true, ["ActionText"] = true }
+            }
+
+            local function getCallCost(entry)
+                local fieldMap = slowTextFields[entry.data.effectType]
+                if fieldMap and fieldMap[entry.data.propName] then
+                    return 10
+                end
+                return 1
+            end
+
+            local function isSlow(entry)
+                return getCallCost(entry) > 1
+            end
+
+            table.sort(sortedEffectProps,function(a,b)
+
+                local aSlow = isSlow(a)
+                local bSlow = isSlow(b)
+
+                if aSlow ~= bSlow then
+                    return not aSlow
+                end
+
+                if a.count ~= b.count then
+                    return a.count > b.count
+                end
+
+                return a.key < b.key
+            end)
+
+            for _,entry in ipairs(sortedEffectProps) do
+
+                local effectType = entry.data.effectType
+                local propName = entry.data.propName
+                local value = entry.data.value
+                local parts = entry.data.parts
+
+                local total = #parts
+                local i = 1
+
+                statusBase = "Effects: "..effectType.." ("..propName..")"
+                statusActive = true
+
+                while i <= total do
+                    if cancelCopying then resetIdle() return end
+
+                    local valueStr
+
+                    if typeof(value) == "Color3" then
+                        valueStr = string.format("(%d,%d,%d)",
+                            math.floor(value.R*255),
+                            math.floor(value.G*255),
+                            math.floor(value.B*255)
+                        )
+                    else
+                        valueStr = tostring(value)
+                    end
+
+                    statusBase = "Effects: "..effectType.."."..propName.." = "..valueStr.." | "..i.."/"..total
+                    statusActive = true
+
+                    local batch = {}
+
+                    for j = i,math.min(i + MAX_BATCH - 1,total) do
+                        table.insert(batch,parts[j])
+                    end
+
+                    local result = EffectRemote:InvokeServer(batch,effectType,propName,value)
+
+                    while result ~= true do
+                        if cancelCopying then resetIdle() return end
+                        result = EffectRemote:InvokeServer(batch,effectType,propName,value)
+                    end
+
+                    completedRemoteCalls += 1
+                    i += MAX_BATCH
+                end
             end
 
             -- [[ MOVE OBJECT ]]
