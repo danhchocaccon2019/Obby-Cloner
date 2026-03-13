@@ -1152,28 +1152,29 @@ submitButton.MouseButton1Click:Connect(function()
                     end
                 end
 
-                -- PaintObject
-                local paintUniques = {}
-                for _, group in pairs(allMoves) do
-                    for _, data in ipairs(group) do
-                        for property, value in pairs(data.properties) do
+                -- PaintObject: 1 call per unique (property, value) group (all ≤1000 parts each)
+                for _, property in ipairs({"Color","Material","CanCollide","CastShadow","Reflectance","Transparency","Surface","Shape","Slipperiness","Water","Style"}) do
+                    local seen = {}
+                    for _, group in pairs(allMoves) do
+                        for _, data in ipairs(group) do
+                            local value = data.properties[property]
                             if value == nil then continue end
                             local key
                             if property == "Color" then
-                                key = property.."|"..string.format("%d_%d_%d", math.floor(value.R*255), math.floor(value.G*255), math.floor(value.B*255))
+                                key = string.format("%d_%d_%d", math.floor(value.R*255), math.floor(value.G*255), math.floor(value.B*255))
                             elseif property == "Material" or property == "Surface" or property == "Shape" or property == "Style" then
-                                key = property.."|"..value.Name
+                                key = value.Name
                             elseif type(value) == "number" and value ~= value then
-                                key = property.."|NaN"
+                                key = "NaN"
                             else
-                                key = property.."|"..tostring(value)
+                                key = tostring(value)
                             end
-                            paintUniques[key] = (paintUniques[key] or 0) + 1
+                            seen[key] = (seen[key] or 0) + 1
                         end
                     end
-                end
-                for _, count in pairs(paintUniques) do
-                    est += math.ceil(count / 1000)
+                    for _, count in pairs(seen) do
+                        est += math.ceil(count / 1000)
+                    end
                 end
 
                 -- BehaviourObject
@@ -1755,6 +1756,10 @@ submitButton.MouseButton1Click:Connect(function()
                     end
 
                     completedRemoteCalls += 1
+                    if isSlow(entry) then
+                        task.wait(10)
+                        completedRemoteCalls += 9
+                    end
                     i += MAX_BATCH
                 end
             end
