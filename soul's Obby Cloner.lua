@@ -533,7 +533,7 @@ submitButton.MouseButton1Click:Connect(function()
                 for _, child in ipairs(part:GetChildren()) do
                     if child:IsA("BoolValue") or child:IsA("Color3Value") or child:IsA("NumberValue") or child:IsA("StringValue") or child:IsA("Vector3Value") then
                         local cname = child.Name:lower()
-                        if cname == "active" or cname == "m1" or cname == "m2" then continue end
+                        if cname == "active" or cname == "originalcollide" or cname == "m1" or cname == "m2" then continue end
 
                         -- for special parts, filter Default* children by what the gating value allows
                         if part.Name == "Gear Part" and child.Name:sub(1, 7) == "Default" then
@@ -1447,6 +1447,15 @@ submitButton.MouseButton1Click:Connect(function()
                         for _, entry in ipairs(instanceBehaviours) do
                             local valueType = entry.valueType
                             local value = entry.value
+
+                            -- [[ OUT OF BOUNDS CHECK FOR VECTOR3VALUE ]]
+                            if valueType == "Vector3Value" then
+                                local transformedVec = myGateCF * (tGateCF:Inverse() * CFrame.new(value))
+                                local checkCF = CFrame.new(transformedVec.X, transformedVec.Y, transformedVec.Z)
+                                if not isInsideArea(checkCF, Vector3.new(0.001, 0.001, 0.001), myArea) then
+                                    continue
+                                end
+                            end
 
                             local keyValue
                             if valueType == "Color3Value" then
