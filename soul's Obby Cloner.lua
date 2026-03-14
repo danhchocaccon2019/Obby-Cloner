@@ -533,7 +533,7 @@ submitButton.MouseButton1Click:Connect(function()
                 for _, child in ipairs(part:GetChildren()) do
                     if child:IsA("BoolValue") or child:IsA("Color3Value") or child:IsA("NumberValue") or child:IsA("StringValue") or child:IsA("Vector3Value") then
                         local cname = child.Name:lower()
-                        if cname == "active" or cname == "originalcollide" or cname == "m1" or cname == "m2" then continue end
+                        if cname == "active" or cname:sub(1,8) == "original" or cname == "m1" or cname == "m2" then continue end
 
                         -- for special parts, filter Default* children by what the gating value allows
                         if part.Name == "Gear Part" and child.Name:sub(1, 7) == "Default" then
