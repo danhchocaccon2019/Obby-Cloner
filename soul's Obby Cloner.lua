@@ -454,11 +454,23 @@ submitButton.MouseButton1Click:Connect(function()
                 savedBehaviours[recordedName] = savedBehaviours[recordedName] or {}
                 savedButtonLinks[recordedName] = savedButtonLinks[recordedName] or {}
 
+                -- read sD and A directly for spinning parts before inserting transform
+                local spinningPartSD = 0
+                local spinningPartAxis = nil
+                if isSpinningPart then
+                    local sdChild = part:FindFirstChild("sD")
+                    local aChild = part:FindFirstChild("A")
+                    if sdChild then spinningPartSD = tonumber(sdChild.Value) or 0 end
+                    if aChild then spinningPartAxis = tostring(aChild.Value) end
+                end
+
                 table.insert(savedTransforms[recordedName], {
                     relative = tGateCF:Inverse() * partCFrame,
                     size = part.Size,
                     movement = movementData,
-                    originalInst = part
+                    originalInst = part,
+                    spinningSD = isSpinningPart and spinningPartSD or nil,
+                    spinningAxis = isSpinningPart and spinningPartAxis or nil
                 })
 
                 table.insert(savedProperties[recordedName], {
@@ -588,7 +600,7 @@ submitButton.MouseButton1Click:Connect(function()
                         })
                     end
                 end
-                -- spinning parts: skip all behaviours (they break remotes)
+
                 table.insert(savedBehaviours[recordedName], isSpinningPart and {} or instanceBehaviours)
 
                 local actualInst = part.Parent:IsA("Model") and part.Parent or part
@@ -929,6 +941,25 @@ submitButton.MouseButton1Click:Connect(function()
 
                                 local behaviourData = savedBehaviours[partName][index] or {}
 
+                                local spinDist = 0
+                                local spinAxis = nil
+                                if partName:lower():find("spin") then
+                                    -- for legacy spinning parts, sD and A were read directly
+                                    -- since their behaviours are skipped to avoid breaking remotes
+                                    if transformData.spinningSD ~= nil then
+                                        spinDist = transformData.spinningSD
+                                        spinAxis = transformData.spinningAxis
+                                    else
+                                        for _, b in ipairs(behaviourData) do
+                                            if b.valueName == "sD" then
+                                                spinDist = tonumber(b.value) or 0
+                                            elseif b.valueName == "A" then
+                                                spinAxis = tostring(b.value)
+                                            end
+                                        end
+                                    end
+                                end
+
                                 table.insert(allMoves[partName], {
                                     clone = resolvedInst,
                                     originalInst = transformData.originalInst,
@@ -936,7 +967,9 @@ submitButton.MouseButton1Click:Connect(function()
                                     size = transformData.size,
                                     movement = movement,
                                     properties = propertyData,
-                                    behaviours = behaviourData
+                                    behaviours = behaviourData,
+                                    spinDist = spinDist,
+                                    spinAxis = spinAxis
                                 })
 
                                 index += 1
@@ -1051,6 +1084,10 @@ submitButton.MouseButton1Click:Connect(function()
                                     -- keep as NumberRange, remote expects it natively
                                 elseif typeof(actualVal) == "Vector2" then
                                     -- keep as Vector2, remote expects it natively
+                                elseif typeof(actualVal) == "UDim2" then
+                                    -- keep as UDim2, remote expects it natively
+                                elseif typeof(actualVal) == "Vector3" then
+                                    -- keep as Vector3, remote expects it natively
                                 elseif type(actualVal) == "userdata" then
                                     local s = tostring(actualVal)
                                     sendVal = s:match("%.([^%.]+)$") or s
@@ -1114,6 +1151,10 @@ submitButton.MouseButton1Click:Connect(function()
                                     -- keep as NumberRange, remote expects it natively
                                 elseif typeof(actualVal) == "Vector2" then
                                     -- keep as Vector2, remote expects it natively
+                                elseif typeof(actualVal) == "Vector3" then
+                                    -- keep as Vector3, remote expects it natively
+                                elseif typeof(actualVal) == "UDim2" then
+                                    -- keep as UDim2, remote expects it natively
                                 elseif type(actualVal) == "userdata" then
                                     local s = tostring(actualVal)
                                     sendVal = s:match("%.([^%.]+)$") or s
@@ -1474,6 +1515,7 @@ submitButton.MouseButton1Click:Connect(function()
             statusActive = true
 
             local BehaviourRemote = game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("BehaviourObject")
+            local deferredSpinD = {}
 
             for _, entry in ipairs(sortedBehaviours) do
                 local valueName = entry.data.valueName
@@ -1504,6 +1546,22 @@ submitButton.MouseButton1Click:Connect(function()
 
                     statusBase = "Behaviours: " .. valueName .. " = " .. tostring(sendValue) .. " | " .. i .. "/" .. total
                     statusActive = true
+
+                    -- defer sD for spin parts until after MoveObject
+                    if valueName == "sD" then
+                        local isSpinBatch = false
+                        for _, p in ipairs(batch) do
+                            if p.Name:lower():find("spin") then
+                                isSpinBatch = true
+                                break
+                            end
+                        end
+                        if isSpinBatch then
+                            table.insert(deferredSpinD, { parts = batch, value = sendValue })
+                            i += MAX_BATCH
+                            continue
+                        end
+                    end
 
                     local extraArg = entry.data.extraArg
                     local result = extraArg
@@ -1790,8 +1848,55 @@ submitButton.MouseButton1Click:Connect(function()
 
                         local inside = true
 
-                        -- Check main position
-                        if not isInsideArea(targetCF, size, myArea) then
+                        -- Check main position (spin parts use swept circle check)
+                        if partName:lower():find("spin") then
+                            local r = data.spinDist or 0
+                            local spinAxis = data.spinAxis -- nil if not set, no default assumption
+
+                            do
+                                -- always use sweep check regardless of sD
+                                -- sD=0 means rotate in place, effectiveR = halfDiag only
+                                local pos = targetCF.Position
+                                local halfArea = myArea.Size / 2
+                                local areaMin = myArea.Position - halfArea
+                                local areaMax = myArea.Position + halfArea
+
+                                -- normalize axis: X stays X, Y stays Y, anything else defaults to Z
+                                local checkAxis
+                                if spinAxis == "X" then
+                                    checkAxis = "X"
+                                elseif spinAxis == "Y" then
+                                    checkAxis = "Y"
+                                else
+                                    -- Z or any weird value defaults to Z
+                                    checkAxis = "Z"
+                                end
+
+                                local halfDiag
+                                if checkAxis == "X" then
+                                    -- sweeps on Y/Z plane
+                                    halfDiag = math.sqrt((size.Y/2)^2 + (size.Z/2)^2)
+                                elseif checkAxis == "Y" then
+                                    -- sweeps on X/Z plane
+                                    halfDiag = math.sqrt((size.X/2)^2 + (size.Z/2)^2)
+                                else
+                                    -- Z or any weird value, sweeps on X/Y plane
+                                    halfDiag = math.sqrt((size.X/2)^2 + (size.Y/2)^2)
+                                end
+
+                                local effectiveR = r + halfDiag
+
+                                local rX = (checkAxis == "X") and (size.X / 2) or effectiveR
+                                local rY = (checkAxis == "Y") and (size.Y / 2) or effectiveR
+                                local rZ = (checkAxis == "Z") and (size.Z / 2) or effectiveR
+
+                                if pos.X - rX < areaMin.X or pos.X + rX > areaMax.X
+                                or pos.Y - rY < areaMin.Y or pos.Y + rY > areaMax.Y
+                                or pos.Z - rZ < areaMin.Z or pos.Z + rZ > areaMax.Z then
+                                    inside = false
+                                end
+                            end
+                        elseif not isInsideArea(targetCF, size, myArea) then
                             inside = false
                         end
 
@@ -1879,6 +1984,20 @@ submitButton.MouseButton1Click:Connect(function()
                             dIndex += MAX_BATCH
                         end
                     end
+                end
+            end
+            -- [[ DEFERRED SPIN DISTANCE ]]
+            if #deferredSpinD > 0 then
+                statusBase = "Status: Syncing Spin Distance"
+                statusActive = true
+                for _, entry in ipairs(deferredSpinD) do
+                    if cancelCopying then resetIdle() return end
+                    local result = BehaviourRemote:InvokeServer(entry.parts, "sD", entry.value)
+                    while result ~= true do
+                        if cancelCopying then resetIdle() return end
+                        result = BehaviourRemote:InvokeServer(entry.parts, "sD", entry.value)
+                    end
+                    completedRemoteCalls += 1
                 end
             end
         end
