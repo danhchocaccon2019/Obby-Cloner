@@ -105,6 +105,66 @@ submitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 submitButton.BackgroundColor3 = Color3.fromRGB(0, 128, 255)
 submitButton.BorderSizePixel = 1
 
+-- [[ EFFECTS TOGGLE BUTTON ]]
+local effectsEnabled = true
+
+local effectsToggle = Instance.new("TextButton")
+effectsToggle.Parent = header
+effectsToggle.Size = UDim2.new(0, 18, 0, 18)
+effectsToggle.Position = UDim2.new(1, -25, 0, 40)
+effectsToggle.Text = ""
+effectsToggle.Font = Enum.Font.SourceSansBold
+effectsToggle.TextScaled = true
+effectsToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+effectsToggle.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+effectsToggle.BorderSizePixel = 1
+
+local effectsTooltip = Instance.new("TextLabel")
+effectsTooltip.Parent = ui
+effectsTooltip.Size = UDim2.new(0, 220, 0, 36)
+effectsTooltip.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+effectsTooltip.BorderSizePixel = 0
+effectsTooltip.TextColor3 = Color3.fromRGB(255, 255, 255)
+effectsTooltip.Font = Enum.Font.SourceSans
+effectsTooltip.TextSize = 13
+effectsTooltip.TextWrapped = true
+effectsTooltip.Text = "Enable to copy Text & Prompt effects.\nWarning: adds ~10s per unique value."
+effectsTooltip.BackgroundTransparency = 0.2
+effectsTooltip.Visible = false
+effectsTooltip.ZIndex = 20
+
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0, 4)
+uiCorner.Parent = effectsTooltip
+
+effectsToggle.MouseEnter:Connect(function()
+    local absPos = effectsToggle.AbsolutePosition
+    effectsTooltip.Position = UDim2.new(0, absPos.X - 148, 0, absPos.Y + 15)
+    effectsTooltip.Visible = true
+end)
+
+effectsToggle.MouseLeave:Connect(function()
+    effectsTooltip.Visible = false
+end)
+
+local effectsInner = Instance.new("Frame")
+effectsInner.Parent = effectsToggle
+effectsInner.Size = UDim2.new(0, 10, 0, 10)
+effectsInner.Position = UDim2.new(0.5, -5, 0.5, -5)
+effectsInner.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+effectsInner.BorderSizePixel = 0
+
+effectsToggle.MouseButton1Click:Connect(function()
+    effectsEnabled = not effectsEnabled
+    if effectsEnabled then
+        effectsToggle.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+        effectsInner.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    else
+        effectsToggle.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+        effectsInner.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    end
+end)
+
 -- [[ DRAG LOGIC ]]
 local dragging = false
 local dragStart, startPos, dragInput
@@ -361,21 +421,203 @@ submitButton.MouseButton1Click:Connect(function()
     statusActive = true
 
     if T then
+        -- [[ CLEAR OBBY (FOR NON-OWNER EDITING) ]]
+        local function clearObbyManually(obbyName)
+            statusBase = "Status: Clearing Obby (Manual)"
+            statusActive = true
+            
+            local obbyFolder = workspace.Obbies:FindFirstChild(obbyName)
+            if not obbyFolder or not obbyFolder:FindFirstChild("Items") then
+                return false
+            end
+            
+            local partsToDelete = {}
+            
+            -- Scan all parts in the obby
+            for _, folder in ipairs(obbyFolder.Items:GetChildren()) do
+                if folder:IsA("Folder") then
+                    for _, obj in ipairs(folder:GetChildren()) do
+                        if obj:IsA("BasePart") then
+                            table.insert(partsToDelete, obj)
+                        elseif obj:IsA("Model") then
+                            -- For models, find the main part
+                            local mainPart = obj:FindFirstChild(obj.Name)
+                            if mainPart and mainPart:IsA("BasePart") then
+                                table.insert(partsToDelete, mainPart)
+                            end
+                        end
+                    end
+                end
+            end
+            
+            if #partsToDelete == 0 then
+                return true
+            end
+            
+            -- Delete in batches of 1000
+            local DeleteRemote = game:GetService("ReplicatedStorage").Events.DeleteObject
+            local MAX_BATCH = 1000
+            local i = 1
+            
+            while i <= #partsToDelete do
+                if cancelCopying then
+                    return false
+                end
+                
+                local batch = {}
+                for j = i, math.min(i + MAX_BATCH - 1, #partsToDelete) do
+                    table.insert(batch, partsToDelete[j])
+                end
+                
+                statusBase = "Clearing: " .. i .. "/" .. #partsToDelete
+                statusActive = true
+                
+                local result = DeleteRemote:InvokeServer(batch)
+                while result ~= true do
+                    if cancelCopying then
+                        return false
+                    end
+                    result = DeleteRemote:InvokeServer(batch)
+                end
+                
+                i += MAX_BATCH
+            end
+            
+            return true
+        end
+
         -- [[ CLEAR OBBY ]]
-        repeat
-            if cancelCopying then
+        local currentObby = game.Players.LocalPlayer.PlayerGui.GetMeObby:Invoke().Name
+        
+        -- Try normal clear first (if you're the owner)
+        local isOwner = (currentObby == game.Players.LocalPlayer.Name)
+
+        if isOwner then
+            -- Original clear method
+            repeat
+                if cancelCopying then
+                    resetIdle()
+                    return
+                end
+                statusBase = "Status: Clearing Obby"
+                statusActive = true
+                stop = game:GetService("ReplicatedStorage").Events.ClearObby:InvokeServer()
+                if game.Players.LocalPlayer.PlayerGui.GetMeObby:Invoke().Name ~= currentObby then
+                    return
+                end
+            until stop == true
+        else
+            -- Manual clear for non-owner editing
+            local cleared = clearObbyManually(currentObby)
+            if not cleared then
                 resetIdle()
                 return
             end
-            statusBase = "Status: Clearing Obby"
-            statusActive = true
-            stop = game:GetService("ReplicatedStorage").Events.ClearObby:InvokeServer()
-            if game.Players.LocalPlayer.PlayerGui.GetMeObby:Invoke().Name ~= game.Players.LocalPlayer.Name then
-                return
-            end
-        until stop == true
+        end
 
-        local currentObby = game.Players.LocalPlayer.PlayerGui.GetMeObby:Invoke().Name
+        -- [[ GET 100M CASH ]]
+        local function get100MCash()
+            local lp = game:GetService("Players"):FindFirstChild(currentObby)
+            local RS = game:GetService("ReplicatedStorage")
+            local DeleteRemote = RS.Events.DeleteObject
+            local AddRemote = RS.Events.AddObject
+            local localObby = workspace.Obbies:FindFirstChild(currentObby)
+            local TARGET = 100_000_000
+
+            local function getCash()
+                local ls = lp:FindFirstChild("leaderstats")
+                if ls and ls:FindFirstChild("Cash") then
+                    return ls.Cash.Value
+                end
+                return 0
+            end
+
+            local function placeDummy()
+                local myArea = workspace.Obbies[currentObby].Area.Area
+
+                -- clamp size so part never exceeds area bounds
+                local cash = getCash()
+                local s = math.max(1, math.floor(cash ^ (1/3)))
+                local maxSafe = math.floor(math.min(myArea.Size.X, myArea.Size.Y, myArea.Size.Z) - 2)
+                s = math.min(s, maxSafe)
+
+                -- always spawn at center so large parts don't clip out
+                local spawnCF = CFrame.new(myArea.Position)
+                local placed = AddRemote:InvokeServer("Part", spawnCF)
+                while placed ~= true do
+                    if cancelCopying then return nil end
+                    placed = AddRemote:InvokeServer("Part", spawnCF)
+                end
+                local found = nil
+                for _, folder in ipairs(localObby.Items:GetChildren()) do
+                    if folder:IsA("Folder") then
+                        for _, obj in ipairs(folder:GetChildren()) do
+                            local candidate = obj:IsA("Model") and obj:FindFirstChild(obj.Name) or obj
+                            if candidate and candidate:IsA("BasePart") and candidate.Name == "Part" then
+                                found = candidate
+                                break
+                            end
+                        end
+                        if found then break end
+                    end
+                end
+                if not found then return nil end
+
+                -- Resize to clamped size to maximise cash reward without OOB
+                local sizeVec = vector.create(s, s, s)
+                local moveBatch = {{
+                    found,
+                    found.CFrame,
+                    sizeVec
+                }}
+                local moveResult = RS.Events.MoveObject:InvokeServer(moveBatch)
+                while moveResult ~= true do
+                    if cancelCopying then return nil end
+                    moveResult = RS.Events.MoveObject:InvokeServer(moveBatch)
+                end
+
+                return found
+            end
+
+            while getCash() < TARGET do
+                if cancelCopying then return end
+
+                statusBase = "Cash: Placing Part..."
+                statusActive = true
+                local dummy = placeDummy()
+
+                if not dummy then
+                    warn("get100MCash: failed to place dummy, retrying...")
+                    task.wait(1)
+                    continue
+                end
+
+                local cash = getCash()
+                local remaining = TARGET - cash
+                local deletesNeeded = math.max(1, math.floor(remaining ^ (1/3)))
+                statusBase = "Cash: $" .. math.floor(cash) .. " / $100M (~" .. deletesNeeded .. " left)"
+                statusActive = true
+
+                local pl = table.create(1000, dummy)
+                local result = DeleteRemote:InvokeServer(pl)
+                while result ~= true do
+                    if cancelCopying then return end
+                    result = DeleteRemote:InvokeServer(pl)
+                end
+
+                task.wait(0.1)
+            end
+
+            statusBase = "Cash: Done! $" .. math.floor(getCash())
+            statusActive = true
+            task.wait(1)
+        end
+
+        statusBase = "Status: Getting 100M Cash"
+        statusActive = true
+        get100MCash()
+        if cancelCopying then resetIdle() return end
+
         local myArea = workspace.Obbies[currentObby].Area.Area
         local playerObby = sourceFolder
         local localPlayerObby = workspace:WaitForChild("Obbies"):WaitForChild(currentObby)
@@ -1088,9 +1330,15 @@ submitButton.MouseButton1Click:Connect(function()
                                     -- keep as UDim2, remote expects it natively
                                 elseif typeof(actualVal) == "Vector3" then
                                     -- keep as Vector3, remote expects it natively
+                                elseif typeof(actualVal) == "Font" then
+                                    sendVal = actualVal.Family:match("rbxasset://(.+)") or tostring(actualVal.Family)
                                 elseif type(actualVal) == "userdata" then
-                                    local s = tostring(actualVal)
-                                    sendVal = s:match("%.([^%.]+)$") or s
+                                    if typeof(actualVal) == "EnumItem" then
+                                        sendVal = actualVal.Name
+                                    else
+                                        local s = tostring(actualVal)
+                                        sendVal = s:match("%.([^%.]+)$") or s
+                                    end
                                 end
                                 table.insert(effectPropList, {
                                     instance = guiChild,
@@ -1155,9 +1403,15 @@ submitButton.MouseButton1Click:Connect(function()
                                     -- keep as Vector3, remote expects it natively
                                 elseif typeof(actualVal) == "UDim2" then
                                     -- keep as UDim2, remote expects it natively
+                                elseif typeof(actualVal) == "Font" then
+                                    sendVal = actualVal.Family:match("rbxasset://(.+)") or tostring(actualVal.Family)
                                 elseif type(actualVal) == "userdata" then
-                                    local s = tostring(actualVal)
-                                    sendVal = s:match("%.([^%.]+)$") or s
+                                    if typeof(actualVal) == "EnumItem" then
+                                        sendVal = actualVal.Name
+                                    else
+                                        local s = tostring(actualVal)
+                                        sendVal = s:match("%.([^%.]+)$") or s
+                                    end
                                 end
                                 table.insert(effectPropList, {
                                     instance = child,
@@ -1779,6 +2033,11 @@ submitButton.MouseButton1Click:Connect(function()
             end)
 
             for _,entry in ipairs(sortedEffectProps) do
+                -- skip text/prompt slow fields if effects disabled
+                if not effectsEnabled and isSlow(entry) then
+                    completedRemoteCalls += math.ceil(#entry.data.parts / 1000) * 10
+                    continue
+                end
 
                 local effectType = entry.data.effectType
                 local propName = entry.data.propName
